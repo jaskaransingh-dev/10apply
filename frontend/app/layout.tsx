@@ -1,7 +1,7 @@
 import "./globals.css";
 import SiteNav from "@/components/SiteNav";
 
-export const metadata = { title: "10Apply — Invite-only · Upload once. You're done.", description: "Invite-only hiring network. Candidates upload a resume once — employers reach out by email. 5 invites per member." };
+export const metadata = { title: "Discovered — Stop applying. Get discovered.", description: "Members-only hiring network. Upload your resume once — companies come to you. Join the waitlist." };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

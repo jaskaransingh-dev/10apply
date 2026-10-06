@@ -4,26 +4,17 @@ import { useSearchParams } from "next/navigation";
 import { api, apiForm } from "@/lib/api";
 
 function Success({ entry }: { entry: any }) {
-  const url = typeof window !== "undefined" ? `${window.location.origin}${entry.invite_path}` : entry.invite_path;
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    try { await navigator.clipboard.writeText(url); } catch { /* clipboard unavailable */ }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
   return (
     <div className="card mx-auto max-w-md space-y-3 text-center">
       <p className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-xl font-black text-emerald-800">✓</p>
       <h1 className="text-2xl font-black tracking-tight">You&apos;re #{entry.position} in line</h1>
       <p className="text-sm text-neutral-500">
         {entry.total} waiting · we saved {entry.side === "candidate" ? "your resume" : "your hiring needs"}.
-        Everyone on the waitlist gets their own invite list — share yours to move up.
+        We&apos;ll email your personal invite the moment your spot opens.
       </p>
-      <div className="flex gap-2">
-        <input className="input font-mono text-sm" readOnly value={url} onFocus={(e) => e.target.select()} />
-        <button onClick={copy} className="btn-primary shrink-0 !px-4">{copied ? "Copied ✓" : "Copy"}</button>
-      </div>
-      <p className="text-xs text-neutral-400">Your link admits 5 people · each of them gets 5 invites</p>
+      <p className="rounded-xl bg-neutral-100 px-3 py-2 text-xs font-semibold text-neutral-500">
+        {entry.email} · we&apos;ll be in touch
+      </p>
     </div>
   );
 }
