@@ -1,0 +1,129 @@
+---
+import Layout from '~/layouts/PageLayout.astro';
+
+import Hero from '~/components/widgets/Hero.astro';
+import Stats from '~/components/widgets/Stats.astro';
+import Steps from '~/components/widgets/Steps.astro';
+import Features2 from '~/components/widgets/Features2.astro';
+import FAQs from '~/components/widgets/FAQs.astro';
+import CallToAction from '~/components/widgets/CallToAction.astro';
+
+const metadata = {
+  title: 'Discovered — Stop applying. Get discovered.',
+  ignoreTitleTemplate: true,
+  description:
+    'Discovered is a members-only hiring network. Upload your resume once and let companies come to you. Join the waitlist.',
+};
+---
+
+<Layout metadata={metadata}>
+  <Hero
+    tagline="Members-only hiring"
+    title="Stop applying.<br />Get discovered."
+    subtitle="Upload your resume once — ranked companies come to you by email and inbox. No applications. No job boards. No scrolling. The waitlist is the only way in."
+    actions={[
+      { variant: 'primary', text: "Join as a Candidate", href: '/waitlist/candidate', icon: 'tabler:arrow-right' },
+      { text: "I'm Hiring", href: '/waitlist/employer' },
+    ]}
+  />
+
+  <div class="mx-auto -mt-4 max-w-3xl px-4 pb-4 text-center">
+    <p class="text-sm font-semibold text-muted">
+      <span id="wl-count">People are waiting</span> — spots open in order.
+    </p>
+  </div>
+  <script>
+    fetch(`${import.meta.env.PUBLIC_API_URL || 'https://discovered-backend-production.up.railway.app'}/waitlist/count`)
+      .then((r) => r.json())
+      .then((d) => {
+        const el = document.getElementById('wl-count');
+        if (el && typeof d.total === 'number' && d.total > 0) el.textContent = `${d.total} ${d.total === 1 ? 'person' : 'people'} waiting`;
+      })
+      .catch(() => {});
+  </script>
+
+  <Stats
+    title="The whole pitch, in numbers"
+    stats={[
+      { title: 'applications, ever', amount: '0' },
+      { title: 'invites per member', amount: '5' },
+      { title: 'places the conversation lives', amount: '2' },
+    ]}
+  />
+
+  <Steps
+    title="Three steps. Then nothing."
+    subtitle="For candidates, the product is the absence of work."
+    items={[
+      {
+        title: 'Join the waitlist',
+        description:
+          'Candidates drop a resume — name, email and skills are read automatically. Employers hold a spot in 30 seconds.',
+        icon: 'tabler:number-1',
+      },
+      {
+        title: 'Get your invite',
+        description:
+          'Spots open in order. Your personal invite arrives by email. No portals, no application forms.',
+        icon: 'tabler:number-2',
+      },
+      {
+        title: 'Companies find you',
+        description: 'Upload once and you are done. Employers reach out by email and inbox — reply from either place.',
+        icon: 'tabler:number-3',
+      },
+    ]}
+  />
+
+  <Features2
+    title="Two sides, one loop"
+    subtitle="Candidates do nothing after onboarding. Employers do the reaching out."
+    columns={2}
+    items={[
+      {
+        title: 'Candidates: upload once',
+        description:
+          'Your resume becomes your profile — autofilled, editable, shown to matching companies. Fresh matches daily. Outreach lands in inbox and email.',
+        icon: 'tabler:file-upload',
+      },
+      {
+        title: 'Employers: post and rank',
+        description:
+          'Paste a job description, get a structured role in seconds and a ranked shortlist of every matching candidate. Message or invite to interview.',
+        icon: 'tabler:briefcase',
+      },
+    ]}
+  />
+
+  <FAQs
+    title="Questions, answered"
+    items={[
+      {
+        title: 'Do candidates ever apply to jobs?',
+        description:
+          'No. There are no apply buttons, no applications, no tracking. Candidates upload a resume once; employers start every conversation.',
+      },
+      {
+        title: 'How do employers and candidates talk?',
+        description:
+          'Every message lives in the in-app inbox and goes out by email too. Reply from either place — the thread stays in sync.',
+      },
+      {
+        title: 'How do invites work?',
+        description:
+          'Every member gets a personal link that admits 5 people, and each of them gets 5 invites of their own. Candidates join by invite; employers join freely.',
+      },
+      {
+        title: 'What happens after I join the waitlist?',
+        description:
+          'We hold your resume (or hiring needs) and your spot in line. Your personal invite arrives by email when your spot opens.',
+      },
+    ]}
+  />
+
+  <CallToAction
+    title="Get discovered."
+    subtitle="Join the waitlist — candidates drop a resume, employers hold a spot."
+    actions={[{ variant: 'primary', text: 'Join the waitlist', href: '/waitlist/candidate', icon: 'tabler:arrow-right' }]}
+  />
+</Layout>

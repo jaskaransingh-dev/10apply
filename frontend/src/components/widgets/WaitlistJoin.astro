@@ -1,0 +1,166 @@
+---
+/**
+ * WaitlistJoin — one form, two sides. Posts multipart FormData straight to the
+ * FastAPI backend (resume file optional for candidates) and renders the
+ * position-in-line success state. No framework JS: plain script tag.
+ */
+interface Props {
+  side: 'candidate' | 'employer';
+}
+
+const { side } = Astro.props;
+const API = import.meta.env.PUBLIC_API_URL || 'https://discovered-backend-production.up.railway.app';
+const isCandidate = side === 'candidate';
+const formId = `wl-${side}`;
+---
+
+<div class="mx-auto w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-8">
+  <div id={`${formId}-fields`}>
+    <h2 class="text-2xl font-bold tracking-tight">
+      {isCandidate ? 'Join as a candidate' : 'Join as an employer'}
+    </h2>
+    <p class="mt-1 text-sm text-muted">
+      {
+        isCandidate
+          ? 'Drop your resume — we pull your name and email automatically.'
+          : "Tell us what you're hiring — we'll hold your spot."
+      }
+    </p>
+
+    <form id={formId} class="mt-5 space-y-4" enctype="multipart/form-data">
+      <input type="hidden" name="side" value={side} />
+
+      {
+        isCandidate && (
+          <label class="block cursor-pointer rounded-2xl border-2 border-dashed border-gray-300 p-8 text-center transition hover:border-gray-500 dark:border-slate-600">
+            <span class="text-2xl">↑</span>
+            <span class="block text-sm font-semibold" data-file-label>
+              Drop resume here or click to choose
+            </span>
+            <span class="block text-xs text-muted">PDF, DOCX, TXT · optional but recommended</span>
+            <input type="file" name="file" accept=".pdf,.docx,.txt" class="hidden" data-file-input />
+          </label>
+        )
+      }
+
+      <div>
+        <label class="mb-1 block text-sm font-semibold" for={`${formId}-name`}>Name</label>
+        <input
+          id={`${formId}-name`}
+          name="name"
+          type="text"
+          class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none focus:border-black focus:ring-2 focus:ring-black/10 dark:border-slate-600 dark:bg-slate-800"
+          placeholder={isCandidate ? 'From your resume if you upload one' : 'Your name'}
+        />
+      </div>
+
+      <div>
+        <label class="mb-1 block text-sm font-semibold" for={`${formId}-email`}>
+          {isCandidate ? 'Email' : 'Work email'}
+        </label>
+        <input
+          id={`${formId}-email`}
+          name="email"
+          type="email"
+          class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none focus:border-black focus:ring-2 focus:ring-black/10 dark:border-slate-600 dark:bg-slate-800"
+          placeholder={isCandidate ? 'you@example.com' : 'you@company.com'}
+        />
+      </div>
+
+      {
+        !isCandidate && (
+          <>
+            <div>
+              <label class="mb-1 block text-sm font-semibold" for={`${formId}-company`}>
+                Company
+              </label>
+              <input
+                id={`${formId}-company`}
+                name="company"
+                type="text"
+                class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none focus:border-black focus:ring-2 focus:ring-black/10 dark:border-slate-600 dark:bg-slate-800"
+                placeholder="Acme AI"
+              />
+            </div>
+            <div>
+              <label class="mb-1 block text-sm font-semibold" for={`${formId}-notes`}>
+                Who are you hiring? (optional)
+              </label>
+              <textarea
+                id={`${formId}-notes`}
+                name="hiring_notes"
+                rows={2}
+                class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none focus:border-black focus:ring-2 focus:ring-black/10 dark:border-slate-600 dark:bg-slate-800"
+                placeholder="e.g. 2 backend engineers, Python + AWS"
+              />
+            </div>
+          </>
+        )
+      }
+
+      <p class="hidden text-sm text-red-600" data-error></p>
+
+      <button
+        type="submit"
+        data-submit
+        class="w-full rounded-xl bg-neutral-950 px-5 py-3 font-bold text-white transition hover:bg-neutral-800 disabled:opacity-40"
+      >
+        Join the waitlist →
+      </button>
+    </form>
+  </div>
+
+  <div id={`${formId}-done`} class="hidden space-y-3 text-center">
+    <p class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-xl font-black text-emerald-800">
+      ✓
+    </p>
+    <h2 class="text-2xl font-bold tracking-tight">You're <span data-position></span> in line</h2>
+    <p class="text-sm text-muted" data-summary></p>
+    <p class="rounded-xl bg-gray-100 px-3 py-2 text-xs font-semibold text-muted dark:bg-slate-800" data-email></p>
+    <p class="text-xs text-muted">We&apos;ll email your personal invite the moment your spot opens.</p>
+  </div>
+</div>
+
+<script define:vars={{ formId, api: API, isCandidate }}>
+  const form = document.getElementById(formId);
+  const fileInput = form?.querySelector('[data-file-input]');
+  const fileLabel = form?.querySelector('[data-file-label]');
+  fileInput?.addEventListener('change', () => {
+    const f = fileInput.files?.[0];
+    if (f && fileLabel) fileLabel.textContent = f.name;
+  });
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const err = form.querySelector('[data-error]');
+    const btn = form.querySelector('[data-submit]');
+    if (err) err.classList.add('hidden');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Joining…';
+    }
+    try {
+      const res = await fetch(`${api}/waitlist/join`, { method: 'POST', body: new FormData(form) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `Signup failed (${res.status})`);
+      document.getElementById(`${formId}-fields`)?.classList.add('hidden');
+      const done = document.getElementById(`${formId}-done`);
+      done?.classList.remove('hidden');
+      const pos = done?.querySelector('[data-position]');
+      const sum = done?.querySelector('[data-summary]');
+      const em = done?.querySelector('[data-email]');
+      if (pos) pos.textContent = `#${data.entry.position}`;
+      if (sum)
+        sum.textContent = `${data.entry.total} waiting · we saved ${isCandidate ? 'your resume' : 'your hiring needs'}.`;
+      if (em) em.textContent = `${data.entry.email} · we'll be in touch`;
+    } catch (ex) {
+      if (err) {
+        err.textContent = ex instanceof Error ? ex.message : 'Something went wrong.';
+        err.classList.remove('hidden');
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Join the waitlist →';
+      }
+    }
+  });
+</script>
