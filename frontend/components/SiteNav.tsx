@@ -67,11 +67,8 @@ export default function SiteNav() {
         </span>
         <div className="ml-auto flex flex-wrap gap-2">
           <Link href="/login" className={`${btn} border hover:bg-neutral-100`}>Log in</Link>
-          <Link href="/signup?role=candidate" className={`${btn} bg-sky-400 text-neutral-950 hover:bg-sky-300`}>
-            Candidate Sign Up
-          </Link>
-          <Link href="/signup?role=employer" className={`${btn} bg-neutral-950 text-white hover:bg-neutral-800`}>
-            Employer Sign Up
+          <Link href="/waitlist" className={`${btn} bg-neutral-950 text-white hover:bg-neutral-800`}>
+            Join the waitlist
           </Link>
         </div>
       </div>

@@ -20,6 +20,26 @@ class User(Base):
 
 INVITE_LIMIT = 5
 
+
+class WaitlistEntry(Base):
+    """Public waitlist (gated launch): resume-extracted candidates + employer
+    leads. Everyone who joins gets a personal 5-use invite code. Not a user —
+    the app itself stays members-only."""
+    __tablename__ = "waitlist"
+    id = Column(String, primary_key=True, default=uid)
+    side = Column(String, default="candidate")  # candidate | employer
+    name = Column(String, default="")
+    email = Column(String, unique=True, index=True, nullable=False)
+    phone = Column(String, default="")
+    location = Column(String, default="")
+    company = Column(String, default="")       # employers: hiring company
+    hiring_notes = Column(String, default="")  # employers: what they're hiring
+    resume_text = Column(Text, default="")
+    skills = Column(Text, default="[]")        # JSON list (extracted)
+    invite_code = Column(String, unique=True, index=True, default="")
+    uses = Column(Integer, default=0)          # invite-code redemptions (max 5)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class CandidateProfile(Base):
     __tablename__ = "candidate_profiles"
     id = Column(String, primary_key=True, default=uid)

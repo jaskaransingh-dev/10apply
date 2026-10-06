@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from .database import Base, engine, get_db
-from .models import User, CandidateProfile, Job, Application, Message, DailyPick, EmailLog, AutoApplyLog, RefreshToken
+from .models import User, CandidateProfile, Job, Application, Message, DailyPick, EmailLog, AutoApplyLog, RefreshToken, WaitlistEntry, INVITE_LIMIT
 from .auth import hash_password, verify_password, make_token, decode_token, new_refresh_token, REFRESH_DAYS
 from .parse import extract_text_from_upload, parse_resume, parse_jd, summarize_job
 from .match import rank_jobs, rank_candidates, hard_filter_ok
@@ -72,7 +72,8 @@ def new_invite_code(db: Session) -> str:
     import secrets as _secrets
     while True:
         code = _secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8]
-        if not db.query(User).filter(User.invite_code == code).first():
+        if not db.query(User).filter(User.invite_code == code).first() \
+           and not db.query(WaitlistEntry).filter(WaitlistEntry.invite_code == code).first():
             return code
 
 
@@ -212,18 +213,33 @@ def signup(body: AuthIn, db: Session = Depends(get_db)):
         if not code:
             raise HTTPException(400, "An invite link is required to join. Ask a member for theirs.")
         inviter = db.query(User).filter(User.invite_code == code).first()
-        if not inviter:
-            raise HTTPException(400, "That invite link is invalid.")
-        used = db.query(User).filter(User.invited_by == inviter.id).count()
-        if used >= INVITE_LIMIT:
-            raise HTTPException(400, "That invite link is fully used (5/5). Ask for a fresh one.")
+        if inviter:
+            used = db.query(User).filter(User.invited_by == inviter.id).count()
+            if used >= INVITE_LIMIT:
+                raise HTTPException(400, "That invite link is fully used (5/5). Ask for a fresh one.")
+        else:
+            # Waitlist-issued code: everyone on the waitlist gets their own 5-use list.
+            wl = db.query(WaitlistEntry).filter(WaitlistEntry.invite_code == code).first()
+            if not wl:
+                raise HTTPException(400, "That invite link is invalid.")
+            if (wl.uses or 0) >= INVITE_LIMIT:
+                raise HTTPException(400, "That invite link is fully used (5/5). Ask for a fresh one.")
+            wl.uses = (wl.uses or 0) + 1
+            db.commit()
     elif role == "employer" and code:
         inviter = db.query(User).filter(User.invite_code == code).first()
-        if not inviter:
-            raise HTTPException(400, "That invite link is invalid.")
-        used = db.query(User).filter(User.invited_by == inviter.id).count()
-        if used >= INVITE_LIMIT:
-            raise HTTPException(400, "That invite link is fully used (5/5). Ask for a fresh one.")
+        if inviter:
+            used = db.query(User).filter(User.invited_by == inviter.id).count()
+            if used >= INVITE_LIMIT:
+                raise HTTPException(400, "That invite link is fully used (5/5). Ask for a fresh one.")
+        else:
+            wl = db.query(WaitlistEntry).filter(WaitlistEntry.invite_code == code).first()
+            if not wl:
+                raise HTTPException(400, "That invite link is invalid.")
+            if (wl.uses or 0) >= INVITE_LIMIT:
+                raise HTTPException(400, "That invite link is fully used (5/5). Ask for a fresh one.")
+            wl.uses = (wl.uses or 0) + 1
+            db.commit()
     u = User(email=email, password_hash=hash_password(body.password), role=role,
              invite_code=new_invite_code(db), invited_by=inviter.id if inviter else "")
     db.add(u)
@@ -315,11 +331,84 @@ def validate_invite(code: str = "", db: Session = Depends(get_db)):
         open_net = db.query(User).count() == 0
         return {"valid": open_net, "open": open_net, "remaining": 0}
     inviter = db.query(User).filter(User.invite_code == code).first()
-    if not inviter:
-        return {"valid": False, "remaining": 0}
-    used = db.query(User).filter(User.invited_by == inviter.id).count()
-    return {"valid": used < INVITE_LIMIT, "remaining": max(0, INVITE_LIMIT - used),
-            "used": used, "limit": INVITE_LIMIT}
+    if inviter:
+        used = db.query(User).filter(User.invited_by == inviter.id).count()
+        return {"valid": used < INVITE_LIMIT, "remaining": max(0, INVITE_LIMIT - used),
+                "used": used, "limit": INVITE_LIMIT}
+    wl = db.query(WaitlistEntry).filter(WaitlistEntry.invite_code == code).first()
+    if wl:
+        used = wl.uses or 0
+        return {"valid": used < INVITE_LIMIT, "remaining": max(0, INVITE_LIMIT - used),
+                "used": used, "limit": INVITE_LIMIT, "waitlist": True}
+    return {"valid": False, "remaining": 0}
+
+# ---------- waitlist (public gate: resume-extracted leads, both sides) ----------
+def waitlist_to_dict(e: WaitlistEntry, db: Session) -> dict:
+    try:
+        skills = json.loads(e.skills or "[]")
+    except Exception:
+        skills = []
+    position = db.query(WaitlistEntry).filter(WaitlistEntry.created_at < e.created_at).count() + 1
+    total = db.query(WaitlistEntry).count()
+    return {"id": e.id, "side": e.side, "name": e.name, "email": e.email,
+            "phone": e.phone, "location": e.location, "company": e.company,
+            "hiring_notes": e.hiring_notes, "skills": skills,
+            "code": e.invite_code, "invite_path": f"/signup?invite={e.invite_code}",
+            "position": position, "total": total}
+
+@app.post("/waitlist/join")
+async def waitlist_join(side: str = Form("candidate"), name: str = Form(""),
+                        email: str = Form(""), phone: str = Form(""),
+                        location: str = Form(""), company: str = Form(""),
+                        hiring_notes: str = Form(""), file: UploadFile = File(None),
+                        db: Session = Depends(get_db)):
+    """Join the public waitlist. Candidates may attach a resume — name, email,
+    phone, location and skills are extracted and prefilled. Everyone who joins
+    gets a personal 5-use invite code. Idempotent per email."""
+    email = (email or "").strip().lower()
+    side = "employer" if side == "employer" else "candidate"
+    resume_text, skills, parsed = "", [], {}
+    if file is not None:
+        raw = await file.read()
+        if len(raw) > 10 * 1024 * 1024:
+            raise HTTPException(400, "File too large (max 10MB)")
+        resume_text = extract_text_from_upload(file.filename or "", raw)
+        if resume_text.strip():
+            parsed = parse_resume(resume_text)
+            skills = parsed.get("skills", [])
+    name = name.strip() or (parsed.get("name", "") if parsed.get("name") != "Not found" else "")
+    if not email:
+        em = parsed.get("email", "")
+        email = em.strip().lower() if em and em != "Not found" else ""
+    if not email or "@" not in email:
+        raise HTTPException(400, "Email is required — add it or upload a resume containing one.")
+    if not phone and parsed.get("phone") and parsed.get("phone") != "Not found":
+        phone = parsed.get("phone", "")
+    if not location and parsed.get("location") and parsed.get("location") != "Not found":
+        location = parsed.get("location", "")
+    existing = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
+    if existing:
+        return {"entry": waitlist_to_dict(existing, db), "joined": False}
+    e = WaitlistEntry(side=side, name=name[:80], email=email, phone=phone[:40],
+                      location=location[:120], company=company[:120],
+                      hiring_notes=hiring_notes[:2000], resume_text=resume_text[:20000],
+                      skills=json.dumps(skills), invite_code=new_invite_code(db))
+    db.add(e)
+    db.commit()
+    db.refresh(e)
+    return {"entry": waitlist_to_dict(e, db), "joined": True,
+            "extracted": {"name": parsed.get("name", ""), "skills": skills} if parsed else {}}
+
+@app.get("/waitlist/position")
+def waitlist_position(email: str = "", db: Session = Depends(get_db)):
+    e = db.query(WaitlistEntry).filter(WaitlistEntry.email == (email or "").strip().lower()).first()
+    if not e:
+        raise HTTPException(404, "Not on the waitlist with that email.")
+    return {"entry": waitlist_to_dict(e, db)}
+
+@app.get("/waitlist/count")
+def waitlist_count(db: Session = Depends(get_db)):
+    return {"total": db.query(WaitlistEntry).count()}
 
 # ---------- candidate ----------
 @app.post("/candidate/resume")
