@@ -42,64 +42,6 @@ export function LoginForm() {
   );
 }
 
-const DEMOS = [
-  { email: "dev-backend@demo.test", label: "Candidate", desc: "Matched jobs + inbox" },
-  { email: "new-grad@demo.test", label: "New candidate", desc: "Fresh profile, no history" },
-  { email: "ava@demo.acme.test", label: "Employer", desc: "Live jobs + ranked candidates" },
-] as const;
-
-export function DemoLogins() {
-  const r = useRouter();
-  const [busy, setBusy] = useState("");
-  const [err, setErr] = useState("");
-
-  async function tryLogin(email: string) {
-    const data = await api("/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: "demo1234" }),
-    });
-    return data;
-  }
-
-  async function loginAs(email: string) {
-    setBusy(email); setErr("");
-    try {
-      let data: any;
-      try {
-        data = await tryLogin(email);
-      } catch {
-        // Demo data missing (fresh DB)? Seed it, then retry once.
-        await api("/demo/seed", { method: "POST" });
-        data = await tryLogin(email);
-      }
-      saveSession(data.token, data.refresh_token || "", data.user, true);
-      r.push(data.user.role === "employer" ? "/employer" : "/candidate/jobs");
-    } catch (e: any) { setErr(e.message); setBusy(""); }
-  }
-
-  return (
-    <div className="card mx-auto mt-4 max-w-md">
-      <p className="font-black">Try a dummy account</p>
-      <p className="text-sm text-neutral-500">One click — no password needed.</p>
-      <div className="mt-3 space-y-2">
-        {DEMOS.map((d) => (
-          <button
-            key={d.email}
-            disabled={!!busy}
-            onClick={() => loginAs(d.email)}
-            className="w-full rounded-xl border px-4 py-2.5 text-left transition hover:bg-neutral-50 disabled:opacity-50"
-          >
-            <span className="text-sm font-semibold">{busy === d.email ? "Logging in…" : `Continue as ${d.label}`}</span>
-            <span className="block text-xs text-neutral-500">{d.email} · {d.desc}</span>
-          </button>
-        ))}
-      </div>
-      {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
-    </div>
-  );
-}
-
 export function SignupForm({ defaultRole = "candidate", defaultInvite = "" }: { defaultRole?: string; defaultInvite?: string }) {
   const r = useRouter();
   const role0 = defaultRole === "employer" ? "employer" : "candidate";
