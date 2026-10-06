@@ -94,7 +94,7 @@ def parse_resume(text: str) -> dict:
     for l in lines:
         if re.search(r"(19|20)\d{2}", l) and re.search(r"(engineer|intern|developer|analyst|manager|scientist|assistant|associate)", l, re.I):
             parts = re.split(r"\s[–—\-–|@]\s|\s{2,}|\sat\s", l)
-            dates = re.findall(r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s?\d{4}|\d{4}-\d{2}|\d{4})", l, re.I)
+            dates = re.findall(r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s?\d{4}|\d{4}-\d{2}\b|\d{4})", l, re.I)
             experience.append({
                 "company": parts[0][:60] if parts else "Not found",
                 "title": l[:90],

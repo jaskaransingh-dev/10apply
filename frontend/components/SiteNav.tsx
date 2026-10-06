@@ -30,6 +30,7 @@ export default function SiteNav() {
           <Link href="/candidate/jobs" className="text-lg font-black">10Apply</Link>
           {link("/candidate/jobs", "Matches")}
           {link("/candidate/inbox", "Inbox")}
+          {link("/candidate/profile", "Profile")}
           {link("/candidate/invite", "Invite")}
           <button onClick={logout} className="ml-auto text-sm text-white/70 underline underline-offset-4 hover:text-white">
             Log out

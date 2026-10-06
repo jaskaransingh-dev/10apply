@@ -28,22 +28,24 @@ export default function JobDetail({ params }: { params: { id: string } }) {
   }
   useEffect(() => { load(); }, []);
 
+  const [sent, setSent] = useState("");
+
   async function inviteToInterview(c: any) {
     const text = `Hi ${(c?.name || c?.full?.name || "there").split(" ")[0]}, we'd like to invite you to interview for the ${job?.title} role at ${job?.company}. What times work for you this week?`;
     await api("/messages", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ candidate_id: c.candidate_id, job_id: params.id, body: text }) });
-    alert("Interview invite sent — by email and inbox");
+    setSent("Interview invite sent — they'll get it in 10Apply and by email.");
   }
   async function contact(c: any) {
     const text = msg.trim() || fillTemplate(TEMPLATE, c, job);
     await api("/messages", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ candidate_id: c.candidate_id, job_id: params.id, body: text }) });
-    alert("Message sent"); setMsg("");
+    setSent("Message sent — they'll get it in 10Apply and by email."); setMsg("");
   }
   async function openCandidate(c: any) {
     const d = await api(`/candidate/${c.candidate_id}`);
     setSel({ ...c, full: d.candidate });
-    setMsg("");
+    setMsg(""); setSent("");
   }
 
   if (err) return <p className="text-red-600">{err}</p>;
@@ -108,9 +110,10 @@ export default function JobDetail({ params }: { params: { id: string } }) {
               <textarea className="input" rows={3} value={msg} onChange={e => setMsg(e.target.value)}
                 placeholder={fillTemplate(TEMPLATE, sel, job)} />
               <p className="text-xs text-neutral-500 mt-1">
-                Leave blank to send the template. Variables: {"{first_name} {job_title} {company}"}
+                Delivered to ✓ 10Apply inbox ✓ candidate email. Leave blank to send the template.
               </p>
             </div>
+            {sent && <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">✓ {sent}</p>}
             <div className="flex gap-2">
               <button onClick={() => inviteToInterview(sel)} className="btn-primary flex-1">Invite to Interview</button>
             </div>

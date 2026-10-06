@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, salaryRange } from "@/lib/api";
-import MatchBadge from "@/components/MatchBadge";
+import { api } from "@/lib/api";
+import MatchCard from "@/components/MatchCard";
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -16,12 +16,14 @@ export default function JobsPage() {
 
   return (
     <div>
-      {/* Passive starting state: you're done, nothing to do */}
+      {/* Signature screen: you're done */}
       <div className="card mb-4 text-center">
-        <h1 className="text-3xl font-black tracking-tight">You&apos;re done 🎉</h1>
+        <p className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-xl font-black text-emerald-800">✓</p>
+        <h1 className="mt-2 text-3xl font-black tracking-tight">You&apos;re all set</h1>
         <p className="mx-auto mt-2 max-w-md text-neutral-600">
-          No applying, no scrolling. Your profile is live — employers reach out by email and the
-          conversation goes back and forth right here.
+          Your profile is being shown to companies looking for people like you.{" "}
+          {jobs.length > 0 ? `${jobs.length} matches refreshed today.` : ""} We&apos;ll email you
+          when an employer reaches out.
         </p>
         <div className="mt-4 flex justify-center gap-2">
           <Link href="/candidate/inbox" className="btn-primary">
@@ -43,21 +45,7 @@ export default function JobsPage() {
       </div>
       {err && <p className="text-red-600 mt-2">{err}</p>}
       <div className="grid md:grid-cols-2 gap-4 mt-4">
-        {jobs.map((j) => (
-          <div key={j.id} className="card">
-            <p className="font-bold">{j.company}</p>
-            <p className="text-lg font-semibold">{j.title}</p>
-            <p className="text-sm text-neutral-500">{j.location} · {j.work_arrangement}</p>
-            <p className="font-semibold mt-2">{salaryRange(j.salary_min, j.salary_max)}</p>
-            <div className="mt-1"><MatchBadge pct={j.match_pct} applied={false} /></div>
-            <div className="text-sm mt-2 space-y-0.5">
-              {(j.matched_skills || []).map((s: string) => <p key={s}>✓ {s}</p>)}
-              {(j.required_skills || []).filter((s: string) => !(j.matched_skills || []).includes(s)).slice(0, 3).map((s: string) => <p key={s} className="text-neutral-400">· {s}</p>)}
-            </div>
-            <p className="text-sm mt-2"><b>Why you&apos;re a match:</b> {j.match_reason}</p>
-            <p className="text-sm text-neutral-500 mt-1">{j.summary}</p>
-          </div>
-        ))}
+        {jobs.map((j) => <MatchCard key={j.id} job={j} />)}
       </div>
       {jobs.length === 0 && !err && <p className="mt-4 text-neutral-500">Finding your matches...</p>}
     </div>
