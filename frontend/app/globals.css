@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { @apply bg-neutral-50 text-neutral-900 antialiased; font-feature-settings: "ss01", "cv11"; }
+.card { @apply bg-white rounded-2xl border border-neutral-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.04)] p-5; }
+.btn { @apply inline-flex items-center justify-center rounded-xl px-5 py-3 font-semibold transition active:scale-[0.99]; }
+.btn-primary { @apply btn bg-neutral-950 text-white hover:bg-neutral-800; }
+.btn-ghost { @apply btn border border-neutral-200 bg-white hover:bg-neutral-100; }
+.input { @apply w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 outline-none transition placeholder:text-neutral-400 focus:border-black focus:ring-2 focus:ring-black/10; }
+.label { @apply text-sm font-semibold mb-1 block; }
+.nav-link { @apply text-sm text-neutral-600 hover:text-black; }
+.badge { @apply inline-block text-xs font-semibold rounded-full px-2.5 py-1 bg-neutral-100; }
+
+/* ---- Side themes: one wrapper per site, every page inherits ---- */
+.theme-candidate .btn-primary { @apply bg-sky-600 hover:bg-sky-700; }
+.theme-candidate .input:focus { @apply focus:ring-sky-600/20 focus:border-sky-600; }
+.theme-candidate .accent { @apply text-sky-700; }
+.theme-candidate .accent-bg { @apply bg-sky-950; }
+
+.theme-employer .btn-primary { @apply bg-amber-300 text-neutral-950 hover:bg-amber-200; }
+.theme-employer .btn-ghost { @apply border-neutral-300; }
+.theme-employer .input:focus { @apply focus:ring-amber-400/40 focus:border-amber-400; }
+.theme-employer .accent { @apply text-amber-600; }
+.theme-employer .accent-bg { @apply bg-neutral-950; }
