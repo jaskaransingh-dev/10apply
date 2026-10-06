@@ -146,7 +146,13 @@ def get_or_create_user(db: Session, email: str, role: str) -> tuple:
     u = db.query(User).filter(User.email == email).first()
     if u:
         return u, False
-    u = User(email=email, password_hash=hash_password(PASSWORD), role=role)
+    # Unique invite_code up front: Postgres UNIQUE rejects duplicate "" defaults.
+    import secrets as _secrets
+    while True:
+        code = _secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8]
+        if not db.query(User).filter(User.invite_code == code).first():
+            break
+    u = User(email=email, password_hash=hash_password(PASSWORD), role=role, invite_code=code)
     db.add(u)
     db.commit()
     db.refresh(u)
