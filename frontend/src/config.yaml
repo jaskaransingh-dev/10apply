@@ -1,5 +1,5 @@
 site:
-  name: Discovered
+  name: Qualify
   site: 'https://discovered-ten.vercel.app'
   base: '/'
   trailingSlash: false
@@ -7,14 +7,14 @@ site:
 # Default SEO metadata
 metadata:
   title:
-    default: Discovered
-    template: '%s — Discovered'
-  description: "Stop applying. Get discovered. Members-only hiring network — upload your resume once and let companies come to you."
+    default: Qualify
+    template: '%s — Qualify'
+  description: "Stop applying. Get discovered. Members-only hiring network. Upload your resume once and let companies come to you."
   robots:
     index: true
     follow: true
   openGraph:
-    site_name: Discovered
+    site_name: Qualify
     images:
       - url: '~/assets/images/default.png'
         width: 1200

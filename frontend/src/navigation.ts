@@ -9,5 +9,5 @@ export const footerData = {
   links: [],
   secondaryLinks: [],
   socialLinks: [],
-  footNote: `Discovered · Members-only hiring. Upload once. You're done.`,
+  footNote: `Qualify · Members-only hiring. Upload once. You're done.`,
 };

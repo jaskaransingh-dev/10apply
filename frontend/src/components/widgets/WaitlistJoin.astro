@@ -1,6 +1,6 @@
 ---
 /**
- * WaitlistJoin — one form, two sides. Posts multipart FormData straight to the
+ * WaitlistJoin: one form, two sides. Posts multipart FormData straight to the
  * FastAPI backend (resume file optional for candidates) and renders the
  * position-in-line success state. No framework JS: plain script tag.
  */
@@ -22,8 +22,8 @@ const formId = `wl-${side}`;
     <p class="mt-1 text-sm text-muted">
       {
         isCandidate
-          ? 'Drop your resume — we pull your name and email automatically.'
-          : "Tell us what you're hiring — we'll hold your spot."
+          ? 'Drop your resume, and we pull your name and email automatically.'
+          : "Tell us what you're hiring, and we'll hold your spot."
       }
     </p>
 
@@ -31,13 +31,26 @@ const formId = `wl-${side}`;
       <input type="hidden" name="side" value={side} />
 
       {
-        isCandidate && (
+        isCandidate ? (
           <label class="block cursor-pointer rounded-2xl border-2 border-dashed border-gray-300 p-8 text-center transition hover:border-gray-500 dark:border-slate-600">
-            <span class="text-2xl">↑</span>
-            <span class="block text-sm font-semibold" data-file-label>
+            <svg class="mx-auto h-7 w-7 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" />
+            </svg>
+            <span class="mt-1 block text-sm font-semibold" data-file-label>
               Drop resume here or click to choose
             </span>
-            <span class="block text-xs text-muted">PDF, DOCX, TXT · optional but recommended</span>
+            <span class="block text-xs text-muted">PDF, DOCX, TXT, optional but recommended</span>
+            <input type="file" name="file" accept=".pdf,.docx,.txt" class="hidden" data-file-input />
+          </label>
+        ) : (
+          <label class="block cursor-pointer rounded-2xl border-2 border-dashed border-gray-300 p-8 text-center transition hover:border-gray-500 dark:border-slate-600">
+            <svg class="mx-auto h-7 w-7 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" />
+            </svg>
+            <span class="mt-1 block text-sm font-semibold" data-file-label>
+              Upload a job description (optional)
+            </span>
+            <span class="block text-xs text-muted">PDF, DOCX, TXT, we save it with your spot</span>
             <input type="file" name="file" accept=".pdf,.docx,.txt" class="hidden" data-file-input />
           </label>
         )
@@ -49,6 +62,7 @@ const formId = `wl-${side}`;
           id={`${formId}-name`}
           name="name"
           type="text"
+          required={!isCandidate}
           class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none focus:border-black focus:ring-2 focus:ring-black/10 dark:border-slate-600 dark:bg-slate-800"
           placeholder={isCandidate ? 'From your resume if you upload one' : 'Your name'}
         />
@@ -62,6 +76,7 @@ const formId = `wl-${side}`;
           id={`${formId}-email`}
           name="email"
           type="email"
+          required={!isCandidate}
           class="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 outline-none focus:border-black focus:ring-2 focus:ring-black/10 dark:border-slate-600 dark:bg-slate-800"
           placeholder={isCandidate ? 'you@example.com' : 'you@company.com'}
         />
@@ -105,14 +120,16 @@ const formId = `wl-${side}`;
         data-submit
         class="w-full rounded-xl bg-neutral-950 px-5 py-3 font-bold text-white transition hover:bg-neutral-800 disabled:opacity-40"
       >
-        Join the waitlist →
+        Join the waitlist
       </button>
     </form>
   </div>
 
   <div id={`${formId}-done`} class="hidden space-y-3 text-center">
-    <p class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-xl font-black text-emerald-800">
-      ✓
+    <p class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+      <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
     </p>
     <h2 class="text-2xl font-bold tracking-tight">You're <span data-position></span> in line</h2>
     <p class="text-sm text-muted" data-summary></p>
@@ -150,8 +167,8 @@ const formId = `wl-${side}`;
       const em = done?.querySelector('[data-email]');
       if (pos) pos.textContent = `#${data.entry.position}`;
       if (sum)
-        sum.textContent = `${data.entry.total} waiting · we saved ${isCandidate ? 'your resume' : 'your hiring needs'}.`;
-      if (em) em.textContent = `${data.entry.email} · we'll be in touch`;
+        sum.textContent = `${data.entry.total} waiting, we saved ${isCandidate ? 'your resume' : 'your hiring needs'}.`;
+      if (em) em.textContent = `${data.entry.email}, we will be in touch`;
     } catch (ex) {
       if (err) {
         err.textContent = ex instanceof Error ? ex.message : 'Something went wrong.';
@@ -159,7 +176,7 @@ const formId = `wl-${side}`;
       }
       if (btn) {
         btn.disabled = false;
-        btn.textContent = 'Join the waitlist →';
+        btn.textContent = 'Join the waitlist';
       }
     }
   });
