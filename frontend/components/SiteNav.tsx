@@ -138,14 +138,27 @@ export default function SiteNav() {
     );
   }
 
-  // Public / Logged out Navigation
+  // Suppress default navbar on standalone dark landing, join, login, and recruiter pages
+  const isStandalone =
+    path === "/" ||
+    path === "/join" ||
+    path === "/signup" ||
+    path === "/login" ||
+    path === "/waitlist" ||
+    path.startsWith("/recruiter");
+
+  if (!logged && isStandalone) {
+    return null;
+  }
+
+  // Public / Logged out Navigation for other pages
   return (
     <nav className="sticky top-0 z-40 border-b border-neutral-200 bg-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <BrandLogo />
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
-            href="/employer"
+            href="/recruiters/waitlist"
             className="text-xs font-medium text-neutral-600 hover:text-neutral-900 px-2.5 py-1.5 transition-colors"
           >
             For Recruiters

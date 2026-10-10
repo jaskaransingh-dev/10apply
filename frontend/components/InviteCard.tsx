@@ -64,7 +64,7 @@ export default function InviteCard() {
 
   async function copyLink(token: string) {
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const url = `${origin}/?invite=${token}`;
+    const url = `${origin}/join?code=${token}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedToken(token);

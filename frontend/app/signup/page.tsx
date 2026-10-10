@@ -1,29 +1,32 @@
 "use client";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
-import { SignupForm } from "@/components/AuthForm";
 
-function codeFromInvite(raw: string): string {
-  const v = (raw || "").trim();
-  if (!v) return "";
-  // Accept a full link like /signup?invite=ABC123 or a bare code.
-  const m = v.match(/[?&]invite=([^&]+)/);
-  if (m) return decodeURIComponent(m[1]);
-  const tail = v.split("/").pop() || v;
-  return tail.split("?").pop() || "";
-}
+import { useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
-function Body() {
-  const q = useSearchParams();
-  const role = q.get("role") === "employer" ? "employer" : "candidate";
-  const invite = codeFromInvite(q.get("invite") || "");
-  return <SignupForm defaultRole={role} defaultInvite={invite} />;
-}
+function RedirectJoin() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-export default function Page() {
+  useEffect(() => {
+    const invite = searchParams.get("invite") || searchParams.get("code") || "";
+    if (invite) {
+      router.replace(`/join?code=${encodeURIComponent(invite)}`);
+    } else {
+      router.replace("/join");
+    }
+  }, [router, searchParams]);
+
   return (
-    <Suspense fallback={<p className="text-center text-neutral-500">Loading…</p>}>
-      <Body />
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 text-xs font-mono">
+      Redirecting to candidate portal...
+    </div>
+  );
+}
+
+export default function SignupRedirectPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-zinc-500 text-xs font-mono">Loading...</div>}>
+      <RedirectJoin />
     </Suspense>
   );
 }
