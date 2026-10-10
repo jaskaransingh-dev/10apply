@@ -32,9 +32,9 @@ def deploy_to_supabase():
     try:
         with engine.connect() as conn:
             version = conn.execute(text("SELECT version();")).scalar()
-            print(f"[✓] Connected successfully! PostgreSQL Version:\n    {version}")
+            print(f"[OK] Connected successfully! PostgreSQL Version:\n    {version}")
     except Exception as e:
-        print(f"[✘] Failed to connect to Supabase database: {e}")
+        print(f"[FAIL] Failed to connect to Supabase database: {e}")
         sys.exit(1)
 
     # 2. Run Migration SQL if present
@@ -47,17 +47,17 @@ def deploy_to_supabase():
             with engine.connect() as conn:
                 conn.execute(text(sql_content))
                 conn.commit()
-            print(f"[✓] Schema successfully applied to Supabase!")
+            print(f"[OK] Schema successfully applied to Supabase!")
         except Exception as e:
             print(f"[!] Warning while executing migration SQL: {e}")
             print("[*] Falling back to SQLAlchemy model reflection...")
             from app.models import Base
             Base.metadata.create_all(bind=engine)
-            print("[✓] SQLAlchemy tables verified.")
+            print("[OK] SQLAlchemy tables verified.")
     else:
         from app.models import Base
         Base.metadata.create_all(bind=engine)
-        print("[✓] SQLAlchemy tables created.")
+        print("[OK] SQLAlchemy tables created.")
 
     # 3. Seed Demo accounts if requested
     seed = os.environ.get("SEED_DEMO", "1").lower() in ["1", "true", "yes"]
@@ -68,11 +68,12 @@ def deploy_to_supabase():
         db = Session()
         try:
             seed_demo(db)
-            print("[✓] Demo accounts successfully created on Supabase.")
+            print("[OK] Demo accounts successfully created on Supabase.")
         finally:
             db.close()
 
-    print("\n[✓] Supabase deployment and verification complete!")
+    print("\n[OK] Supabase deployment and verification complete!")
+
 
 if __name__ == "__main__":
     deploy_to_supabase()
