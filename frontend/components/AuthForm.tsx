@@ -1,207 +1,274 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, saveSession } from "@/lib/api";
 
 export function LoginForm() {
-  const r = useRouter();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(""); setBusy(true);
+    setError("");
+    setLoading(true);
     try {
       const data = await api("/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       });
       saveSession(data.token, data.refresh_token || "", data.user, true);
-      r.push(data.user.role === "employer" ? "/employer" : "/candidate/jobs");
-    } catch (e: any) { setErr(e.message); setBusy(false); }
+      router.push(data.user.role === "candidate" ? "/candidate/jobs" : "/employer");
+    } catch (e: any) {
+      setError(e.message || "Failed to log in.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <form onSubmit={submit} className="card mx-auto max-w-md space-y-3">
-      <h1 className="text-2xl font-black tracking-tight">Welcome back</h1>
-      <p className="text-sm text-neutral-500">Log in to your account.</p>
+    <form onSubmit={submit} className="bg-white border border-neutral-200 rounded-lg p-6 max-w-md mx-auto space-y-4 shadow-sm">
       <div>
-        <span className="label">Email</span>
-        <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+        <h1 className="text-xl font-semibold text-neutral-900 tracking-tight">Sign in to your account</h1>
+        <p className="text-xs text-neutral-500 mt-1">Access your jobs, resume, and messages.</p>
       </div>
-      <div>
-        <span className="label">Password</span>
-        <input className="input" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+
+      {error && <div className="p-2.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded">{error}</div>}
+
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-neutral-700">Email address</label>
+        <input
+          className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-md bg-white text-neutral-900 focus:outline-none focus:border-neutral-900"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+        />
       </div>
-      {err && <p className="text-sm text-red-600">{err}</p>}
-      <button className="btn-primary w-full" disabled={busy}>{busy ? "Logging in…" : "Log in"}</button>
+
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-neutral-700">Password</label>
+        <input
+          className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-md bg-white text-neutral-900 focus:outline-none focus:border-neutral-900"
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+      >
+        {loading ? "Signing in..." : "Sign in"}
+      </button>
     </form>
   );
 }
 
 const DEMOS = [
-  { email: "dev-backend@demo.test", label: "Candidate", desc: "Matched jobs + inbox" },
-  { email: "new-grad@demo.test", label: "New candidate", desc: "Fresh profile, no history" },
-  { email: "ava@demo.acme.test", label: "Employer", desc: "Live jobs + ranked candidates" },
+  {
+    email: "alex.backend@example.com",
+    label: "Candidate · Alex Chen",
+    desc: "Backend Engineer · Python, FastAPI, PostgreSQL",
+    role: "candidate",
+  },
+  {
+    email: "elena.datascience@example.com",
+    label: "Candidate · Elena Rostova",
+    desc: "Data Scientist · ML, PyTorch, Statistics",
+    role: "candidate",
+  },
+  {
+    email: "marcus.fullstack@example.com",
+    label: "Candidate · Marcus Taylor",
+    desc: "Full-Stack Engineer · TypeScript, React, Next.js",
+    role: "candidate",
+  },
+  {
+    email: "founder@apexfoundry.example.com",
+    label: "Recruiter · Apex Foundry",
+    desc: "Hiring Founding Backend Engineer",
+    role: "recruiter",
+  },
+  {
+    email: "hiring@metricpulse.example.com",
+    label: "Recruiter · MetricPulse Analytics",
+    desc: "Hiring Lead Data Scientist",
+    role: "recruiter",
+  },
 ] as const;
 
 export function DemoLogins() {
-  const r = useRouter();
+  const router = useRouter();
   const [busy, setBusy] = useState("");
-  const [err, setErr] = useState("");
 
-  async function tryLogin(email: string) {
-    const data = await api("/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password: "demo1234" }),
-    });
-    return data;
-  }
-
-  async function loginAs(email: string) {
-    setBusy(email); setErr("");
+  async function quick(email: string, role: string) {
+    setBusy(email);
     try {
       let data: any;
       try {
-        data = await tryLogin(email);
+        data = await api("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password: "demo1234" }),
+        });
       } catch {
-        // Demo data missing (fresh DB)? Seed it, then retry once.
         await api("/demo/seed", { method: "POST" });
-        data = await tryLogin(email);
+        data = await api("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password: "demo1234" }),
+        });
       }
       saveSession(data.token, data.refresh_token || "", data.user, true);
-      r.push(data.user.role === "employer" ? "/employer" : "/candidate/jobs");
-    } catch (e: any) { setErr(e.message); setBusy(""); }
+      router.push(role === "candidate" ? "/candidate/jobs" : "/employer");
+    } catch (e: any) {
+      alert("Sign-in error: " + e.message);
+    } finally {
+      setBusy("");
+    }
   }
 
   return (
-    <div className="card mx-auto mt-4 max-w-md">
-      <p className="font-black">Try a dummy account</p>
-      <p className="text-sm text-neutral-500">One click — no password needed.</p>
-      <div className="mt-3 space-y-2">
+    <div className="max-w-md mx-auto mt-6 bg-white border border-neutral-200 rounded-lg p-5 space-y-3">
+      <div className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider text-center">
+        Demo Accounts (Fictional Dataset)
+      </div>
+      <div className="space-y-1.5">
         {DEMOS.map((d) => (
           <button
             key={d.email}
-            disabled={!!busy}
-            onClick={() => loginAs(d.email)}
-            className="w-full rounded-xl border px-4 py-2.5 text-left transition hover:bg-neutral-50 disabled:opacity-50"
+            type="button"
+            disabled={busy === d.email}
+            onClick={() => quick(d.email, d.role)}
+            className="w-full text-left p-2.5 rounded border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-colors text-xs flex items-center justify-between"
           >
-            <span className="text-sm font-semibold">{busy === d.email ? "Logging in…" : `Continue as ${d.label}`}</span>
-            <span className="block text-xs text-neutral-500">{d.email} · {d.desc}</span>
+            <div>
+              <div className="font-medium text-neutral-900">{d.label}</div>
+              <div className="text-[11px] text-neutral-500">{d.desc}</div>
+            </div>
+            <span className="text-neutral-400 text-xs">
+              {busy === d.email ? "..." : "Sign in →"}
+            </span>
           </button>
         ))}
       </div>
-      {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
     </div>
   );
 }
 
 export function SignupForm({ defaultRole = "candidate", defaultInvite = "" }: { defaultRole?: string; defaultInvite?: string }) {
-  const r = useRouter();
-  const role0 = defaultRole === "employer" ? "employer" : "candidate";
+  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState(role0);
-  const [invite, setInvite] = useState(defaultInvite);
-  const [inviteState, setInviteState] = useState<{ checked: boolean; valid: boolean; remaining: number }>({ checked: false, valid: false, remaining: 0 });
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => { setInvite(defaultInvite); }, [defaultInvite]);
-  useEffect(() => { setRole(defaultRole === "employer" ? "employer" : "candidate"); }, [defaultRole]);
-
-  useEffect(() => {
-    let live = true;
-    if (!invite.trim()) { setInviteState({ checked: false, valid: false, remaining: 0 }); return; }
-    const t = setTimeout(async () => {
-      try {
-        const d = await api(`/invites/validate?code=${encodeURIComponent(invite.trim())}`);
-        if (live) setInviteState({ checked: true, valid: !!d.valid, remaining: d.remaining ?? 0 });
-      } catch { if (live) setInviteState({ checked: true, valid: false, remaining: 0 }); }
-    }, 400);
-    return () => { live = false; clearTimeout(t); };
-  }, [invite]);
+  const [password, setPassword] = useState("demo1234");
+  const [inviteToken, setInviteToken] = useState(defaultInvite);
+  const [role, setRole] = useState(defaultRole);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(""); setBusy(true);
+    setError("");
+    setLoading(true);
     try {
       const data = await api("/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role, invite_code: invite.trim() }),
+        body: JSON.stringify({ email: email.trim(), password, role, invite_token: inviteToken.trim() }),
       });
       saveSession(data.token, data.refresh_token || "", data.user, true);
-      r.push(data.user.role === "employer" ? "/employer" : "/candidate/upload");
-    } catch (e: any) { setErr(e.message); setBusy(false); }
+      router.push(role === "candidate" ? "/candidate/upload" : "/employer");
+    } catch (e: any) {
+      setError(e.message || "Failed to sign up.");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const isCandidate = role === "candidate";
-
   return (
-    <form onSubmit={submit} className="card mx-auto max-w-md space-y-4">
+    <form onSubmit={submit} className="bg-white border border-neutral-200 rounded-lg p-6 max-w-md mx-auto space-y-4 shadow-sm">
       <div>
-        <h1 className="text-2xl font-black tracking-tight">
-          {isCandidate ? "Candidate Sign Up" : "Employer Sign Up"}
-        </h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          {isCandidate
-            ? "Upload your resume once — then you're done. Invite-only: paste the link a member sent you."
-            : "Post a job, meet ranked candidates. No invite needed — employers join freely."}
-        </p>
+        <h1 className="text-xl font-semibold text-neutral-900 tracking-tight">Create an account</h1>
+        <p className="text-xs text-neutral-500 mt-1">Get started on the resume-first hiring platform.</p>
       </div>
 
-      {/* Role switch — the two landing buttons land here preselected */}
-      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-neutral-100 p-1.5">
-        {(["candidate", "employer"] as const).map((x) => (
+      {error && <div className="p-2.5 text-xs text-red-700 bg-red-50 border border-red-200 rounded">{error}</div>}
+
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-neutral-700">Account Type</label>
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            key={x}
-            onClick={() => setRole(x)}
-            className={`rounded-xl px-3 py-2.5 text-sm font-bold capitalize transition ${
-              role === x ? "bg-white text-black shadow" : "text-neutral-500 hover:text-black"
+            onClick={() => setRole("candidate")}
+            className={`py-1.5 px-3 rounded text-xs font-medium border text-center transition-colors ${
+              role === "candidate" ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-700 border-neutral-200"
             }`}
           >
-            {x === "candidate" ? "Candidate" : "Employer"}
+            Candidate
           </button>
-        ))}
+          <button
+            type="button"
+            onClick={() => setRole("recruiter")}
+            className={`py-1.5 px-3 rounded text-xs font-medium border text-center transition-colors ${
+              role === "recruiter" ? "bg-neutral-900 text-white border-neutral-900" : "bg-white text-neutral-700 border-neutral-200"
+            }`}
+          >
+            Recruiter
+          </button>
+        </div>
       </div>
 
-      {isCandidate && (
-        <div>
-          <span className="label">Invite code</span>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-neutral-700">Email address</label>
+        <input
+          className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-md bg-white text-neutral-900"
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-neutral-700">Password</label>
+        <input
+          className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-md bg-white text-neutral-900"
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+        />
+      </div>
+
+      {role === "candidate" && (
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-neutral-700">Invitation Code (Optional)</label>
           <input
-            className="input font-mono"
-            value={invite}
-            onChange={(e) => setInvite(e.target.value)}
-            placeholder="Paste invite code or link"
+            className="w-full px-3 py-2 text-xs border border-neutral-300 rounded-md bg-white text-neutral-900 font-mono"
+            type="text"
+            value={inviteToken}
+            onChange={(e) => setInviteToken(e.target.value)}
+            placeholder="cross_xxxxx"
           />
-          {invite.trim() && inviteState.checked && (
-            <p className={`mt-1 text-xs font-semibold ${inviteState.valid ? "text-emerald-600" : "text-red-600"}`}>
-              {inviteState.valid
-                ? `✓ Invite valid — ${inviteState.remaining} of 5 spots left on this link`
-                : "✕ This invite is invalid or fully used (5/5)."}
-            </p>
-          )}
         </div>
       )}
 
-      <div>
-        <span className="label">Email</span>
-        <input className="input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
-      </div>
-      <div>
-        <span className="label">Password</span>
-        <input className="input" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6+ characters" />
-      </div>
-
-      {err && <p className="text-sm text-red-600">{err}</p>}
-      <button className={`btn-primary w-full ${isCandidate ? "" : "!bg-amber-300 !text-neutral-950 hover:!bg-amber-200"}`} disabled={busy}>
-        {busy ? "Creating account…" : isCandidate ? "Create candidate account" : "Create employer account"}
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full py-2 bg-neutral-900 hover:bg-neutral-800 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-50 cursor-pointer"
+      >
+        {loading ? "Creating account..." : "Create Account"}
       </button>
     </form>
   );

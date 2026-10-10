@@ -1,85 +1,201 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { Users, Copy, Check, XCircle } from "lucide-react";
+
+interface InviteItem {
+  id: string;
+  token: string;
+  recipient_email: string;
+  status: string;
+  created_at: string;
+  accepted_at?: string;
+}
+
+interface InviteStats {
+  limit: number;
+  accepted: number;
+  pending: number;
+  remaining: number;
+  invitations: InviteItem[];
+}
 
 export default function InviteCard() {
-  const [data, setData] = useState<{ code: string; used: number; limit: number; remaining: number; invited: string[]; invite_path: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [stats, setStats] = useState<InviteStats | null>(null);
+  const [recipient, setRecipient] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [err, setErr] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  useEffect(() => {
-    api("/invites/me").then(setData).catch((e: any) => setErr(e.message));
-  }, []);
-
-  if (err) return <div className="card"><p className="text-sm text-red-600">{err}</p></div>;
-  if (!data) return <div className="card"><p className="text-sm text-neutral-500">Loading your invite link…</p></div>;
-
-  const url = typeof window !== "undefined" ? `${window.location.origin}${data.invite_path}` : data.invite_path;
-  const slots = Array.from({ length: data.limit }, (_, i) => i < data.used);
-
-  async function copy() {
+  async function loadInvites() {
     try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const el = document.createElement("input");
-      el.value = url;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand("copy");
-      document.body.removeChild(el);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const data = await api("/invitations/my");
+      setStats(data);
+    } catch (e: any) {
+      setErr(e.message || "Failed to load invitations.");
     }
   }
 
+  useEffect(() => {
+    loadInvites();
+  }, []);
+
+  async function handleCreateInvite(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    setErr("");
+    setSuccessMsg("");
+    try {
+      await api("/invitations/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipient_email: recipient.trim() }),
+      });
+      await loadInvites();
+      setRecipient("");
+      setSuccessMsg("Single-use invitation generated.");
+    } catch (e: any) {
+      setErr(e.message || "Failed to create invitation.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function copyLink(token: string) {
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/?invite=${token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000);
+    } catch {
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000);
+    }
+  }
+
+  if (!stats) {
+    return <div className="text-xs text-neutral-400 py-6 text-center">Loading invitations...</div>;
+  }
+
   return (
-    <div className="card">
-      <p className="text-xs font-bold tracking-[0.2em] text-neutral-400">YOUR INVITE LINK</p>
-      <h2 className="mt-1 text-2xl font-black tracking-tight">
-        Invite 5 people
-      </h2>
-      <p className="mt-1 text-sm text-neutral-500">
-        Your link works for the first {data.limit} people who join. Each of them gets their own link with {data.limit} invites.
-      </p>
+    <div className="space-y-6">
+      <div className="border border-neutral-200 bg-white rounded-lg p-6 space-y-5">
+        <div>
+          <h2 className="text-base font-semibold text-neutral-900 tracking-tight">
+            Candidate Invitations
+          </h2>
+          <p className="text-xs text-neutral-500 mt-1">
+            Every candidate receives five single-use invitation links. Your balance decrements only when a new candidate successfully registers.
+          </p>
+        </div>
 
-      <div className="mt-4 flex gap-2">
-        <input className="input font-mono text-sm" readOnly value={url} onFocus={(e) => e.target.select()} />
-        <button onClick={copy} className="btn-primary shrink-0 !px-4">
-          {copied ? "Copied ✓" : "Copy"}
-        </button>
+        {/* Balance Metric Card */}
+        <div className="rounded-md bg-neutral-50 border border-neutral-200 p-4 space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-neutral-700">
+              {stats.accepted} accepted · {stats.pending} pending
+            </span>
+            <span className="font-semibold text-neutral-900">
+              {stats.remaining} of {stats.limit} remaining
+            </span>
+          </div>
+
+          <div className="flex gap-1.5 h-1.5 w-full">
+            {Array.from({ length: stats.limit }).map((_, i) => {
+              const isAccepted = i < stats.accepted;
+              const isPending = i >= stats.accepted && i < stats.accepted + stats.pending;
+              return (
+                <div
+                  key={i}
+                  className={`flex-1 rounded-full ${
+                    isAccepted ? "bg-neutral-900" : isPending ? "bg-neutral-400" : "bg-neutral-200"
+                  }`}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {err && (
+          <div className="p-2.5 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+            {err}
+          </div>
+        )}
+
+        {successMsg && (
+          <div className="p-2.5 bg-neutral-100 rounded text-xs text-neutral-800">
+            {successMsg}
+          </div>
+        )}
+
+        {/* Generate Invite Form */}
+        {stats.remaining > 0 ? (
+          <form onSubmit={handleCreateInvite} className="space-y-2 border-t border-neutral-100 pt-4">
+            <label className="block text-xs font-medium text-neutral-700">Generate single-use invitation</label>
+            <div className="flex gap-2">
+              <input
+                type="email"
+                placeholder="Recipient email (optional)"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-xs border border-neutral-300 rounded-md bg-white text-neutral-900"
+              />
+              <button
+                type="submit"
+                disabled={creating}
+                className="px-3.5 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white rounded-md text-xs font-medium disabled:opacity-50"
+              >
+                {creating ? "Generating..." : "Generate"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="text-xs text-neutral-500 pt-2 border-t border-neutral-100">
+            All 5 invitation slots have been generated or used.
+          </div>
+        )}
       </div>
 
-      <div className="mt-4">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-bold">{data.used} / {data.limit} used</span>
-          <span className="text-neutral-500">{data.remaining} left</span>
-        </div>
-        <div className="mt-2 flex gap-1.5">
-          {slots.map((filled, i) => (
-            <span key={i} className={`h-2.5 flex-1 rounded-full ${filled ? "bg-black" : "bg-neutral-200"}`} />
-          ))}
-        </div>
-      </div>
+      {/* Invitations List */}
+      <div className="border border-neutral-200 bg-white rounded-lg p-6 space-y-4">
+        <h3 className="font-semibold text-sm text-neutral-900">Your Invitation Tokens</h3>
+        {stats.invitations && stats.invitations.length > 0 ? (
+          <div className="space-y-2">
+            {stats.invitations.map((inv) => (
+              <div
+                key={inv.id}
+                className="border border-neutral-200 rounded-md p-3 flex items-center justify-between gap-3 text-xs bg-neutral-50/50"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs font-medium text-neutral-900">{inv.token}</span>
+                    <span className="text-[10px] font-medium uppercase px-2 py-0.5 rounded bg-neutral-200 text-neutral-700">
+                      {inv.status}
+                    </span>
+                  </div>
+                  {inv.recipient_email && (
+                    <div className="text-neutral-500 text-[11px]">Intended: {inv.recipient_email}</div>
+                  )}
+                </div>
 
-      {data.invited.length > 0 ? (
-        <div className="mt-4 border-t pt-3">
-          <p className="text-xs font-bold tracking-widest text-neutral-400">JOINED WITH YOUR LINK</p>
-          <ul className="mt-2 space-y-1 text-sm">
-            {data.invited.map((e) => (
-              <li key={e} className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800">
-                  ✓
-                </span>
-                {e}
-              </li>
+                {inv.status === "pending" && (
+                  <button
+                    onClick={() => copyLink(inv.token)}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-white border border-neutral-200 hover:border-neutral-300 text-neutral-800 rounded text-xs font-medium"
+                  >
+                    {copiedToken === inv.token ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3 text-neutral-400" />}
+                    <span>{copiedToken === inv.token ? "Copied" : "Copy"}</span>
+                  </button>
+                )}
+              </div>
             ))}
-          </ul>
-        </div>
-      ) : (
-        <p className="mt-4 text-sm text-neutral-500">No one has joined with your link yet — share it to grow your network.</p>
-      )}
+          </div>
+        ) : (
+          <p className="text-xs text-neutral-400">No invitation tokens generated yet.</p>
+        )}
+      </div>
     </div>
   );
 }

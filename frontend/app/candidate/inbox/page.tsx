@@ -1,10 +1,17 @@
 "use client";
 import Inbox from "@/components/Inbox";
 
-export default function Page() {
+export default function CandidateInboxPage() {
   return (
-    <div>
-      <h1 className="mb-4 text-3xl font-black tracking-tight">Inbox</h1>
+    <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight text-neutral-900">
+          Messages
+        </h1>
+        <p className="text-xs text-neutral-500 mt-0.5">
+          Persistent communication threads with verified startup recruiters and hiring managers.
+        </p>
+      </div>
       <Inbox />
     </div>
   );

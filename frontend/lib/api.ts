@@ -1,16 +1,12 @@
 function resolveApiBase(): string {
   const env = (process.env.NEXT_PUBLIC_API || "").trim().replace(/\/+$/, "");
   if (env) return env;
-  // Runtime fallback: same host as the page, backend on :8000.
-  // This fixes "Failed to fetch" when the app is opened via 127.0.0.1
-  // but NEXT_PUBLIC_API was baked as localhost (or vice versa).
   if (typeof window !== "undefined" && window.location?.hostname) {
     return `http://${window.location.hostname}:8000`;
   }
   return "http://127.0.0.1:8000";
 }
 
-// Kept for backwards compat, but prefer apiBase() (runtime-aware).
 export const API =
   (process.env.NEXT_PUBLIC_API || "").trim().replace(/\/+$/, "") ||
   "http://127.0.0.1:8000";
@@ -36,8 +32,6 @@ export function authUser() {
   }
 }
 
-/** Session storage. Remember-me => localStorage (survives restarts);
- *  otherwise sessionStorage (this tab only). Reads check both. */
 function rememberMe(): boolean {
   if (typeof window === "undefined") return true;
   return localStorage.getItem("remember") !== "off";
@@ -54,7 +48,7 @@ function readSession(key: string): string {
   return clean(localStorage.getItem(key)) || clean(sessionStorage.getItem(key));
 }
 
-export function saveSession(token: string, refresh: string, user: any, remember: boolean) {
+export function saveSession(token: string, refresh: string, user: any, remember: boolean = true) {
   if (typeof window === "undefined") return;
   clearSession();
   const store = remember ? localStorage : sessionStorage;
@@ -73,7 +67,6 @@ export function clearSession() {
   }
 }
 
-/** Best-effort server logout (revokes refresh token), then clears locally. */
 export async function logout() {
   const rt = refreshToken();
   const tk = token();
@@ -94,7 +87,6 @@ export async function logout() {
   }
 }
 
-/** Single-flight refresh: concurrent 401s share one /auth/refresh call. */
 let refreshPromise: Promise<boolean> | null = null;
 async function tryRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
@@ -130,19 +122,15 @@ function redirectToLogin() {
 
 function friendlyError(e: unknown, base: string): Error {
   if (e instanceof Error) {
-    // Undici / browser network failure surfaces as TypeError: Failed to fetch
     if (e.name === "TypeError" && /fetch|network|load failed/i.test(e.message)) {
-      return new Error(
-        `Cannot reach the API at ${base}. Is the backend running? Start it with: cd backend && uvicorn app.main:app --port 8000`
-      );
+      return new Error(`Cannot reach the API at ${base}. Is the backend running?`);
     }
-    // Abort / timeout
     if (e.name === "AbortError") {
-      return new Error(`Request to ${base} timed out. Is the backend running?`);
+      return new Error(`Request to ${base} timed out.`);
     }
     return e;
   }
-  return new Error(`Cannot reach the API at ${base}. Is the backend running?`);
+  return new Error(`Cannot reach the API at ${base}.`);
 }
 
 async function parseBody(res: Response): Promise<any> {
@@ -170,9 +158,6 @@ export async function api(path: string, opts: RequestInit = {}, timeoutMs = 1500
     });
     const data = await parseBody(res);
     if (!res.ok) {
-      // Expired access token? Silently refresh once and retry — this is what
-      // keeps users logged in. Only falls through to login when refresh
-      // is impossible (no refresh token, revoked, logged out elsewhere).
       if (res.status === 401 && !_retried && !path.startsWith("/auth/") && typeof window !== "undefined") {
         if (await tryRefresh()) {
           return api(path, opts, timeoutMs, true);
@@ -191,7 +176,6 @@ export async function api(path: string, opts: RequestInit = {}, timeoutMs = 1500
   }
 }
 
-/** POST/PUT helper for FormData (resume / JD upload). Don't set Content-Type manually. */
 export async function apiForm(
   path: string,
   form: FormData,
@@ -203,18 +187,177 @@ export async function apiForm(
   return api(path, { ...opts, method: opts.method || "POST", headers, body: form }, timeoutMs);
 }
 
-/** Build an absolute URL for backend-served files (e.g. /uploads/x.pdf). */
 export function fileUrl(p: string | null | undefined): string {
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
   return `${resolveApiBase()}${p.startsWith("/") ? p : `/${p}`}`;
 }
 
-export function money(n: number) {
+export function money(n: number, currency: string = "USD") {
   if (!n) return "—";
-  return n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`;
+  const sym = currency === "EUR" ? "€" : (currency === "GBP" ? "£" : "$");
+  return n >= 1000 ? `${sym}${Math.round(n / 1000)}k` : `${sym}${n}`;
 }
-export function salaryRange(a: number, b: number) {
+
+export function salaryRange(a: number, b: number, currency: string = "USD") {
   if (!a && !b) return "Salary not listed";
-  return `${money(a)} – ${money(b)}`;
+  return `${money(a, currency)} – ${money(b, currency)}`;
 }
+
+// ---------- Marketplace Helpers ----------
+export async function getCandidateJobs() {
+  return api("/api/candidate/jobs");
+}
+
+export async function applyToJob(jobId: string) {
+  return api(`/api/candidate/apply/${jobId}`, { method: "POST" });
+}
+
+export async function uploadResumeFile(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  return apiForm("/api/resumes/upload", form);
+}
+
+export async function getCandidateResumeStatus() {
+  return api("/api/candidate/resume/status");
+}
+
+export async function getCandidateProjects() {
+  return api("/api/candidate/projects");
+}
+
+export async function addCandidateProject(proj: { label: string; url: string; project_type?: string; description?: string }) {
+  return api("/api/candidate/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(proj),
+  });
+}
+
+export async function deleteCandidateProject(id: string) {
+  return api(`/api/candidate/projects/${id}`, { method: "DELETE" });
+}
+
+export async function getRecruiterCandidates(jobId?: string) {
+  const q = jobId ? `?job_id=${encodeURIComponent(jobId)}` : "";
+  return api(`/api/employer/candidates${q}`);
+}
+
+export async function getRecruiterCandidate(id: string) {
+  return api(`/api/employer/candidate/${id}`);
+}
+
+export async function getRecruiterJobs() {
+  return api("/api/employer/jobs");
+}
+
+export async function createRecruiterJob(data: any) {
+  return api("/api/employer/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getConversations() {
+  return api("/api/conversations");
+}
+
+export async function getConversationMessages(convId: string) {
+  return api(`/api/conversations/${convId}/messages`);
+}
+
+export async function sendConversationMessage(convId: string, content: string) {
+  return api(`/api/conversations/${convId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+}
+
+export async function startConversation(candidateId: string, jobId?: string, initialMessage?: string) {
+  return api("/api/conversations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ candidate_id: candidateId, job_id: jobId, initial_message: initialMessage }),
+  });
+}
+
+export async function magicLogin(email: string, inviteCode?: string) {
+  return api("/auth/magic-link", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, invite_code: inviteCode }),
+  });
+}
+
+export async function validateInvitation(token: string) {
+  return api(`/invitations/validate?token=${encodeURIComponent(token)}`);
+}
+
+export async function forgotPassword(email: string) {
+  return api("/auth/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPassword(token: string, newPassword: string) {
+  return api("/auth/reset-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+}
+
+export async function onboardCandidate(data: any) {
+  return api("/api/candidate/onboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function onboardCandidateWithFile(formData: FormData) {
+  const base = resolveApiBase();
+  const res = await fetch(`${base}/api/candidate/onboard-file`, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || data.message || "Failed to complete onboarding.");
+  }
+  return data;
+}
+
+export async function joinRecruiterWaitlist(data: {
+  name: string;
+  email: string;
+  company_name: string;
+  company_website?: string;
+  hiring_needs?: string;
+}) {
+  return api("/api/recruiter-waitlist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function joinWaitlist(email: string, name?: string, inviteCode?: string) {
+  return api("/api/waitlist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, name, invite_code: inviteCode }),
+  });
+}
+
+export async function trigger10amDispatch() {
+  return api("/api/candidate/run-10am", {
+    method: "POST",
+  });
+}
+

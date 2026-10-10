@@ -1,0 +1,8 @@
+name = "rec-marketplace"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "./frontend/.next"
+
+# Optional environment variables
+[vars]
+NEXT_PUBLIC_API = "http://127.0.0.1:8000"

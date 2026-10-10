@@ -1,267 +1,334 @@
-"""Vector-embed matching: dense-vector retrieval + structured bonuses.
+"""Deterministic, explainable 5-component matching engine for resume-first hiring marketplace.
 
-Pipeline (per ranking call):
-1. Analyze text into tokens (lowercase, stopword removal).
-2. Build field-weighted term counters (title/skills count more than body).
-3. Compute IDF over the corpus being ranked.
-4. Embed every doc as an IDF-weighted mean of token vectors (`embed.py`),
-   rank by cosine similarity, map to 0..1.
-5. Blend 50% vector relevance with exact-skill / experience / location /
-   seniority / compensation / role-preference signals.
+Formula (Section 5.3):
+    S(c, j) = 0.35 * K + 0.25 * E + 0.20 * R + 0.10 * P + 0.10 * D
+    Score Percentage = round(100 * S(c, j), 1)
 
-Weights: 50% vector similarity / 20% exact skills / 10% experience /
-5% location / 5% seniority / 5% compensation / 5% role pref. Score -> 0-100.
+Components:
+    K: Required skill coverage with canonical taxonomy mapping
+    E: Relevant work experience (duration & domain alignment)
+    R: Role and responsibility similarity
+    P: Preferred skill coverage
+    D: Relevant projects and demonstrated work (GitHub, demos, portfolio)
 """
 import json
 import math
 import re
 from collections import Counter
+from typing import Dict, List, Any, Tuple, Optional
 
-from .embed import embed_counter, cosine_sim
+from .parse import CANONICAL_SKILL_MAP, canonicalize_skill
 
-LEVEL_RANK = {"New Grad": 0, "1–2 years": 1, "1-2 years": 1, "2–5 years": 2, "2-5 years": 2, "5+ years": 3}
-EXP_RE = re.compile(r"(\d+)(?:\s*[-–+]\s*(\d+))?")
 
-STOPWORDS = frozenset(
+def _normalize_tokens(text: str) -> set:
+    """Normalize text into lowercase alphanumeric tokens, stripping punctuation."""
+    if not text:
+        return set()
+    cleaned = re.sub(r"[^\w\s+#.]", " ", text.lower())
+    words = cleaned.split()
+    stopwords = {
+        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "has", "he",
+        "in", "is", "it", "its", "of", "on", "that", "the", "to", "was", "were", "will",
+        "with", "we", "you", "your", "our", "they", "them", "this", "these", "those",
+        "or", "not", "no", "if", "when", "where", "which", "who", "what", "how", "why"
+    }
+    return {w for w in words if len(w) > 1 and w not in stopwords}
+
+
+def check_skill_match(target_skill: str, candidate_skills: List[str], candidate_text: str) -> Tuple[float, str]:
+    """Check if a target skill is demonstrated by candidate.
+    Returns (match_value: 0.0, 0.5, or 1.0, evidence: str).
     """
-    a an and are as at be by for from has he in is it its of on that the to was
-    were will with we you your our they them this these those then than than
-    or not no if else when where which who whom what how why can could should
-    would may might must shall do does did done have had having been being are
-    into over under out up down off about into through during before after
-    between both each few more most other some such only own same so too very
-    s t just don now ll re ve m looking seek seeking join team help build work
-    """.split()
-)
+    target_canon = canonicalize_skill(target_skill)
+    target_lower = target_skill.lower()
 
-TOKEN_RE = re.compile(r"[a-z0-9+#.]+")
+    # 1. Exact canonical match in candidate's extracted skills
+    for cs in candidate_skills:
+        if canonicalize_skill(cs).lower() == target_canon.lower():
+            return 1.0, f"Demonstrated {target_canon}"
 
-# Cosine -> 0..1 mapping, calibrated: related docs ~= 0.85+, unrelated ~= 0.0.
-SIM_LO = 0.05
-SIM_HI = 0.80
+    # 2. Check full text for canonical name or aliases
+    low_text = candidate_text.lower()
+    if target_lower in low_text or target_canon.lower() in low_text:
+        return 1.0, f"Demonstrated {target_canon} in experience"
 
-# Field weights: how much a term occurrence counts in the embedding.
-W_TITLE = 4.0
-W_REQ_SKILL = 4.0
-W_PREF_SKILL = 2.0
-W_CAND_SKILL = 4.0
-W_ROLE = 3.0
-W_EXP = 2.0
-W_BODY = 1.0
+    # 3. Check alias mapping
+    for alias, canon in CANONICAL_SKILL_MAP.items():
+        if canon.lower() == target_canon.lower() and alias in low_text:
+            return 1.0, f"Demonstrated {target_canon} ({alias})"
 
+    # 4. Partial substring match
+    for cs in candidate_skills:
+        if target_lower in cs.lower() or cs.lower() in target_lower:
+            return 0.5, f"Related skill: {cs}"
 
-def exp_midpoint(exp: str) -> float:
-    m = EXP_RE.search(exp or "")
-    if not m:
-        return 1.0
-    a = float(m.group(1))
-    b = float(m.group(2)) if m.group(2) else a + (2 if "+" in (exp or "") else 0)
-    return (a + b) / 2
+    return 0.0, ""
 
 
-def analyze(text: str) -> list:
-    """Lowercase, split on non-alnum, drop stopwords/short tokens."""
-    toks = TOKEN_RE.findall((text or "").lower())
-    return [t.strip("+#.").strip() for t in toks
-            if len(t) >= 2 and t not in STOPWORDS and t.strip("+#.")]
+def hard_filter_ok(candidate_profile, job) -> Tuple[bool, str]:
+    """Check hard constraints (work authorization, strict on-site location, compensation floor)."""
+    # 1. Work authorization
+    job_sponsor = (getattr(job, "sponsorship_policy", "") or (job.get("sponsorship_policy", "") if isinstance(job, dict) else "") or "").lower()
+    cand_auth = (getattr(candidate_profile, "work_authorization", "") or (candidate_profile.get("work_authorization", "") if isinstance(candidate_profile, dict) else "") or "").lower()
+
+    if "cannot sponsor" in job_sponsor or (isinstance(job, dict) and job.get("requires_sponsorship") is False):
+        if "need sponsorship" in cand_auth or "requires visa" in cand_auth:
+            return False, "Job cannot sponsor visa and candidate requires sponsorship"
+
+    # 2. Location & remote
+    job_arrang = (getattr(job, "work_arrangement", None) or getattr(job, "remote_policy", None) or (job.get("remote_policy") if isinstance(job, dict) else None) or "Remote").lower()
+    cand_arrang = (getattr(candidate_profile, "work_arrangement", None) or getattr(candidate_profile, "remote_preference", None) or (candidate_profile.get("remote_preference") if isinstance(candidate_profile, dict) else None) or "Remote").lower()
+    if job_arrang == "on-site" and cand_arrang == "remote":
+        cand_loc = (getattr(candidate_profile, "location", "") or (candidate_profile.get("location", "") if isinstance(candidate_profile, dict) else "") or "").lower()
+        job_loc = (getattr(job, "location", "") or (job.get("location", "") if isinstance(job, dict) else "") or "").lower()
+        if job_loc and cand_loc and job_loc != cand_loc:
+            return False, f"Job requires on-site presence in {job_loc}"
+
+    # 3. Compensation floor
+    cand_min = (getattr(candidate_profile, "min_salary", 0) or getattr(candidate_profile, "salary_min", 0) or (candidate_profile.get("min_salary", 0) if isinstance(candidate_profile, dict) else 0) or 0)
+    job_max = (getattr(job, "salary_max", 0) or (job.get("salary_max", 0) if isinstance(job, dict) else 0) or 0)
+    if cand_min > 0 and job_max > 0 and cand_min > job_max:
+        return False, f"Candidate minimum salary exceeds job maximum budget"
+
+    return True, "Eligible"
 
 
-def tokens(s: str) -> Counter:
-    """Backwards-compat alias: analyzed term frequencies."""
-    return Counter(analyze(s))
+def compute_match_score(
+    candidate_skills: List[str],
+    candidate_text: str,
+    experience_list: List[dict],
+    total_exp_years: float,
+    candidate_headline: str,
+    candidate_roles: List[str],
+    projects_list: List[dict],
+    job_title: str,
+    job_description: str,
+    required_skills: List[str],
+    preferred_skills: List[str],
+    job_min_exp_years: float = 2.0
+) -> Dict[str, Any]:
+    """Compute the 5-component deterministic score S(c, j)."""
+    # 1. K: Required skill coverage (35%)
+    matched_required = []
+    missing_required = []
+    k_sum = 0.0
+    req_weights_sum = 0.0
 
+    if not required_skills:
+        # Fallback if no explicit required skills: derive from JD
+        required_skills = ["Python", "SQL"]
 
-def _add(counter: Counter, text: str, weight: float) -> None:
-    if weight == 1.0:
-        counter.update(analyze(text))
-        return
-    for t in analyze(text):
-        counter[t] += weight
+    for req in required_skills:
+        weight = 1.0
+        val, evidence = check_skill_match(req, candidate_skills, candidate_text)
+        k_sum += weight * val
+        req_weights_sum += weight
+        canon_req = canonicalize_skill(req)
+        if val >= 0.5:
+            matched_required.append(canon_req)
+        else:
+            missing_required.append(canon_req)
 
+    k_score = k_sum / max(req_weights_sum, 1.0)
+    k_score = max(0.0, min(1.0, k_score))
 
-def _skills_list(obj, attr: str) -> list:
-    try:
-        v = json.loads(getattr(obj, attr) or "[]")
-        return v if isinstance(v, list) else []
-    except Exception:
-        return []
+    # 2. E: Relevant work experience (25%)
+    # Duration factor
+    duration_ratio = min(1.0, total_exp_years / max(job_min_exp_years, 1.0))
+    # Domain & title relevance
+    job_toks = _normalize_tokens(job_title + " " + job_description)
+    exp_toks = set()
+    recent_company = ""
+    for exp in experience_list:
+        if not recent_company and exp.get("employer"):
+            recent_company = exp.get("employer")
+        exp_toks.update(_normalize_tokens(exp.get("title", "") + " " + exp.get("evidence", "")))
 
+    overlap_e = len(job_toks & exp_toks) / max(len(job_toks & exp_toks) + 5, 1)
+    e_score = 0.5 * duration_ratio + 0.5 * min(1.0, overlap_e * 2.0)
+    e_score = max(0.0, min(1.0, e_score))
 
-def job_fields(job) -> Counter:
-    """Field-weighted term counter for a job posting."""
-    tf: Counter = Counter()
-    _add(tf, job.title or "", W_TITLE)
-    for s in _skills_list(job, "required_skills"):
-        _add(tf, s, W_REQ_SKILL)
-    for s in _skills_list(job, "preferred_skills"):
-        _add(tf, s, W_PREF_SKILL)
-    _add(tf, job.description or "", W_BODY)
-    return tf
+    # 3. R: Role and responsibility similarity (20%)
+    title_toks = _normalize_tokens(job_title)
+    cand_role_toks = _normalize_tokens(candidate_headline + " " + " ".join(candidate_roles))
+    title_overlap = len(title_toks & cand_role_toks) / max(len(title_toks), 1)
+    r_score = min(1.0, 0.4 + 0.6 * title_overlap) if title_overlap > 0 else 0.35
 
-
-def candidate_fields(profile_data: dict, resume_text: str) -> Counter:
-    """Field-weighted term counter for a candidate."""
-    p = profile_data or {}
-    tf: Counter = Counter()
-    for s in p.get("skills", []) or []:
-        _add(tf, s, W_CAND_SKILL)
-    for r in (p.get("job_preferences", {}) or {}).get("roles", []) or []:
-        _add(tf, r, W_ROLE)
-    for e in p.get("experience", []) or []:
-        if isinstance(e, dict):
-            _add(tf, f"{e.get('title', '')} {e.get('company', '')}", W_EXP)
-    _add(tf, resume_text or "", W_BODY)
-    return tf
-
-
-def build_idf(doc_tfs: list) -> dict:
-    """IDF over a corpus: log((N - df + 0.5) / (df + 0.5) + 1)."""
-    n = len(doc_tfs)
-    if n == 0:
-        return {}
-    df: Counter = Counter()
-    for tf in doc_tfs:
-        for t in tf:
-            df[t] += 1
-    return {t: math.log((n - f + 0.5) / (f + 0.5) + 1.0) for t, f in df.items()}
-
-
-def sim_to_score(cos: float) -> float:
-    """Map cosine similarity to 0..1 relevance."""
-    if cos <= SIM_LO:
-        return 0.0
-    if cos >= SIM_HI:
-        return 1.0
-    return (cos - SIM_LO) / (SIM_HI - SIM_LO)
-
-
-def hard_filter_ok(candidate_prefs: dict, profile_data: dict, job) -> bool:
-    """Lenient hard filters for MVP: only block on salary floor mismatch that's extreme."""
-    try:
-        cmin = int(candidate_prefs.get("salary_min", 0) or 0)
-    except Exception:
-        cmin = 0
-    if cmin and job.salary_max and job.salary_max < cmin * 0.8:
-        return False
-    return True
-
-
-def _structured(prefs: dict, cskills_low: set, job, req: list):
-    req_low = [s.lower() for s in req]
-    matched = [s for s in req if s.lower() in cskills_low]
-    skill_score = (len(matched) / len(req_low)) if req_low else 0.6
-
-    c_mid = exp_midpoint(prefs.get("experience_level") if isinstance(prefs.get("experience_level"), str) else "1–2 years")
-    j_mid = exp_midpoint(job.experience or "")
-    exp_score = max(0.0, 1.0 - abs(c_mid - j_mid) / 5.0)
-
-    clocs = [l.lower() for l in (prefs.get("locations", []) or [])]
-    if clocs:
-        jl = (job.location or "").lower()
-        loc_score = 1.0 if any(c in jl or jl in c for c in clocs) else (
-            0.9 if (prefs.get("remote") and "remote" in (job.work_arrangement or "").lower()) else 0.4)
-    elif prefs.get("remote") and "remote" in (job.work_arrangement or "").lower():
-        loc_score = 1.0
+    # 4. P: Preferred skill coverage (10%)
+    matched_preferred = []
+    if preferred_skills:
+        p_sum = 0.0
+        for pref in preferred_skills:
+            val, _ = check_skill_match(pref, candidate_skills, candidate_text)
+            p_sum += val
+            if val >= 0.5:
+                matched_preferred.append(canonicalize_skill(pref))
+        p_score = p_sum / len(preferred_skills)
     else:
-        loc_score = 1.0 if not clocs else 0.6
+        # If no preferred skills specified, bonus for general skill breadth
+        p_score = min(1.0, len(candidate_skills) / 8.0)
+    p_score = max(0.0, min(1.0, p_score))
 
-    seniority_score = exp_score
+    # 5. D: Relevant projects and demonstrated work (10%)
+    d_score = 0.1
+    project_mentions = []
+    if projects_list:
+        d_score = 0.5  # Base credit for having projects/demos
+        for proj in projects_list:
+            proj_name = proj.get("name") or proj.get("title") or proj.get("label") or "Project"
+            proj_text = f"{proj_name} {proj.get('description', '')} {' '.join(proj.get('technologies', []))}"
+            p_toks = _normalize_tokens(proj_text)
+            if p_toks & job_toks:
+                d_score = min(1.0, d_score + 0.25)
+                project_mentions.append(proj_name)
+    d_score = max(0.0, min(1.0, d_score))
 
-    comp_score = 1.0
+    # Total weighted score: S(c, j) = 0.35K + 0.25E + 0.20R + 0.10P + 0.10D
+    total_score = 0.35 * k_score + 0.25 * e_score + 0.20 * r_score + 0.10 * p_score + 0.10 * d_score
+    total_pct = round(total_score * 100.0, 1)
+
+    # Strengths list
+    strengths = []
+    if matched_required:
+        strengths.append(f"Demonstrated core skills: {', '.join(matched_required[:3])}")
+    if matched_preferred:
+        strengths.append(f"Preferred skills: {', '.join(matched_preferred[:2])}")
+    if total_exp_years >= job_min_exp_years:
+        strengths.append(f"{total_exp_years} years relevant experience")
+    if project_mentions:
+        strengths.append(f"Project evidence: {', '.join(project_mentions[:2])}")
+
+    # Generate transparent evidence-based explanation
+    exp_parts = []
+    if total_pct >= 80:
+        exp_parts.append(f"Strong match for {job_title}.")
+    elif total_pct >= 60:
+        exp_parts.append(f"Solid match for {job_title}.")
+    else:
+        exp_parts.append(f"Partial match for {job_title}.")
+
+    if matched_required:
+        skills_str = ", ".join(matched_required[:3])
+        if recent_company:
+            exp_parts.append(f"Resume demonstrates {skills_str} experience at {recent_company}.")
+        else:
+            exp_parts.append(f"Resume demonstrates verified {skills_str} experience.")
+
+    if project_mentions:
+        exp_parts.append(f"Includes demonstrated work on {project_mentions[0]}.")
+
+    if missing_required:
+        exp_parts.append(f"Does not provide direct evidence for {', '.join(missing_required[:2])}.")
+    else:
+        exp_parts.append("Meets all explicitly required technical skills.")
+
+    explanation = " ".join(exp_parts)
+
+    return {
+        "score": round(total_score, 4),
+        "score_pct": total_pct,
+        "breakdown": {
+            "K": round(k_score, 3),
+            "E": round(e_score, 3),
+            "R": round(r_score, 3),
+            "P": round(p_score, 3),
+            "D": round(d_score, 3)
+        },
+        "matched_skills": matched_required,
+        "missing_skills": missing_required,
+        "matched_preferred": matched_preferred,
+        "strengths": strengths,
+        "explanation": explanation
+    }
+
+
+def score_pair(profile_data: dict, prefs: dict, resume_text: str, job, **kwargs):
+    """Backwards-compatible tuple return: (pct, why, matched)."""
+    cskills = profile_data.get("skills", []) or []
+    exp_list = profile_data.get("experience", []) or []
+    tot_exp = profile_data.get("total_experience_years", 2.0)
+    projs = profile_data.get("projects", []) or []
+    headline = profile_data.get("headline", "")
+
+    req_skills = []
+    pref_skills = []
     try:
-        cmin = int(prefs.get("salary_min", 0) or 0)
-        if cmin and job.salary_max:
-            comp_score = 1.0 if job.salary_max >= cmin else max(0.0, job.salary_max / max(cmin, 1))
+        req_skills = json.loads(getattr(job, "required_skills", "[]") or "[]")
     except Exception:
-        pass
-
-    roles = [r.lower() for r in (prefs.get("roles", []) or [])]
-    jt = (job.title or "").lower()
-    pref_score = 1.0 if not roles else (
-        1.0 if any((r in jt) or (jt in r) or bool(set(r.split()) & set(jt.split())) for r in roles) else 0.5)
-
-    return skill_score, exp_score, loc_score, seniority_score, comp_score, pref_score, matched, roles
-
-
-def score_pair(profile_data: dict, prefs: dict, resume_text: str, job,
-               idf: dict | None = None, cand_vec: list | None = None,
-               job_vec: list | None = None) -> tuple:
-    """Score one candidate/job pair: vector similarity + structured signals.
-
-    Pass corpus `idf` (and optionally precomputed vectors) from the ranking
-    call. Without them, falls back to neutral IDF so single-pair use works.
-    """
-    pdata = profile_data or {}
-    cskills = set(s.lower() for s in (pdata.get("skills", []) or []))
+        req_skills = []
     try:
-        req = json.loads(job.required_skills or "[]")
+        pref_skills = json.loads(getattr(job, "preferred_skills", "[]") or "[]")
     except Exception:
-        req = []
+        pref_skills = []
 
-    idf = idf or {}
-    if cand_vec is None:
-        cand_vec = embed_counter(candidate_fields(pdata, resume_text or ""), idf or None)
-    if job_vec is None:
-        job_vec = embed_counter(job_fields(job), idf or None)
-    text_score = sim_to_score(cosine_sim(cand_vec, job_vec))
-
-    skill_score, exp_score, loc_score, seniority_score, comp_score, pref_score, matched, roles = _structured(
-        prefs or {}, cskills, job, req)
-
-    total = (
-        0.50 * text_score + 0.20 * skill_score + 0.10 * exp_score
-        + 0.05 * loc_score + 0.05 * seniority_score + 0.05 * comp_score + 0.05 * pref_score
+    res = compute_match_score(
+        candidate_skills=cskills,
+        candidate_text=resume_text or json.dumps(profile_data),
+        experience_list=exp_list,
+        total_exp_years=tot_exp,
+        candidate_headline=headline,
+        candidate_roles=prefs.get("roles", []),
+        projects_list=projs,
+        job_title=getattr(job, "title", "Software Engineer"),
+        job_description=getattr(job, "description", ""),
+        required_skills=req_skills,
+        preferred_skills=pref_skills,
+        job_min_exp_years=2.0
     )
-    pct = round(total * 100, 1)
-    if matched:
-        why = f"Strong overlap on {', '.join(matched[:3])}" + (" and relevant experience." if exp_score > 0.5 else ".")
-    elif text_score > 0.6:
-        why = "Your profile is a strong semantic match for this role."
-    elif text_score > 0.3:
-        why = "Your background is closely related to this role."
-    else:
-        why = f"Matches your interest in {roles[0] if roles else 'this role'} with compatible location and level."
-    return pct, why, matched
+
+    class CompatResult(tuple):
+        def __new__(cls, pct, why, matched, missing=None, strengths=None, breakdown=None):
+            return super().__new__(cls, (pct, why, matched))
+        def __init__(self, pct, why, matched, missing=None, strengths=None, breakdown=None):
+            self.pct = pct
+            self.why = why
+            self.matched = matched
+            self.missing = missing or []
+            self.strengths = strengths or []
+            self.breakdown = breakdown or {}
+
+    return CompatResult(
+        pct=res["score_pct"],
+        why=res["explanation"],
+        matched=res["matched_skills"],
+        missing=res["missing_skills"],
+        strengths=res["strengths"],
+        breakdown=res["breakdown"]
+    )
 
 
 def rank_jobs(pdata: dict, prefs: dict, resume_text: str, jobs: list) -> list:
-    """Rank jobs for one candidate with vector search. Returns [(pct, job, why, matched)]."""
-    cand_tf = candidate_fields(pdata, resume_text or "")
-    job_tfs = [(j, job_fields(j)) for j in jobs]
-    idf = build_idf([tf for _, tf in job_tfs] + ([cand_tf] if cand_tf else []))
-    cand_vec = embed_counter(cand_tf, idf)
+    """Rank jobs for one candidate. Returns [(pct, job, why, matched)]."""
     out = []
-    for j, jtf in job_tfs:
-        pct, why, matched = score_pair(pdata, prefs, resume_text or "", j,
-                                       idf=idf, cand_vec=cand_vec,
-                                       job_vec=embed_counter(jtf, idf))
-        out.append((pct, j, why, matched))
+    for j in jobs:
+        res = score_pair(pdata, prefs, resume_text, j)
+        out.append((res.pct, j, res.why, res.matched))
     out.sort(key=lambda x: x[0], reverse=True)
     return out
 
 
 def rank_candidates(job, profiles: list) -> list:
-    """Rank candidates for one job (JD-as-query vector). Returns [(pct, profile, pdata, why, matched)]."""
-    job_tf = job_fields(job)
-    rows = []
-    for p, pdata, resume in profiles:
-        rows.append((p, pdata, resume, candidate_fields(pdata, resume or "")))
-    idf = build_idf([tf for _, _, _, tf in rows] + ([job_tf] if job_tf else []))
-    job_vec = embed_counter(job_tf, idf)
+    """Rank candidates for one job. Returns [(pct, profile, pdata, why, matched)]."""
     out = []
-    for p, pdata, resume, ctf in rows:
+    for p, pdata, resume in profiles:
         try:
-            prefs = {"roles": json.loads(p.roles or "[]"), "locations": json.loads(p.locations or "[]"),
-                     "remote": bool(p.remote), "salary_min": p.salary_min or 0,
-                     "experience_level": p.experience_level or "New Grad"}
-            pd = json.loads(p.profile_data or "{}")
+            prefs = {
+                "roles": json.loads(p.roles or "[]") if isinstance(p.roles, str) else (p.roles or []),
+                "locations": json.loads(p.locations or "[]") if isinstance(p.locations, str) else (p.locations or []),
+                "remote": bool(p.remote),
+                "salary_min": getattr(p, "salary_min", 0) or 0,
+            }
         except Exception:
-            prefs = {"roles": [], "locations": [], "remote": True,
-                     "salary_min": 0, "experience_level": "1–2 years"}
-            pd = pdata
-        pct, why, matched = score_pair(pd, prefs, resume or "", job,
-                                       idf=idf, job_vec=job_vec,
-                                       cand_vec=embed_counter(ctf, idf))
-        out.append((pct, p, pd, why, matched))
+            prefs = {"roles": [], "locations": [], "remote": True, "salary_min": 0}
+        
+        pd = pdata if isinstance(pdata, dict) else {}
+        if not pd and getattr(p, "profile_data", None):
+            try:
+                pd = json.loads(p.profile_data)
+            except Exception:
+                pd = {}
+
+        res = score_pair(pd, prefs, resume or getattr(p, "resume_text", ""), job)
+        out.append((res.pct, p, pd, res.why, res.matched))
     out.sort(key=lambda x: x[0], reverse=True)
     return out

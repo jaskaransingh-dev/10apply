@@ -1,16 +1,35 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { authUser, token } from "@/lib/api";
 
 export default function EmployerLayout({ children }: { children: React.ReactNode }) {
-  const r = useRouter();
-  const [ready, setReady] = useState(false);
+  const router = useRouter();
+  const path = usePathname();
+  const isRootEmployer = path === "/employer";
+  const [authorized, setAuthorized] = useState(isRootEmployer);
+
   useEffect(() => {
-    if (!token()) { r.replace("/login"); return; }
-    if (authUser()?.role !== "employer") { r.replace("/candidate/jobs"); return; }
-    setReady(true);
-  }, [r]);
-  if (!ready) return <p className="p-6 text-neutral-500">Loading...</p>;
-  return <div className="theme-employer">{children}</div>;
+    if (isRootEmployer) {
+      setAuthorized(true);
+      return;
+    }
+    const t = token();
+    const user = authUser();
+    if (!t) {
+      router.replace("/employer");
+      return;
+    }
+    if (user?.role !== "employer" && user?.role !== "recruiter" && user?.role !== "admin") {
+      router.replace("/candidate/jobs");
+      return;
+    }
+    setAuthorized(true);
+  }, [router, isRootEmployer]);
+
+  if (!authorized && !isRootEmployer) {
+    return <div className="p-12 text-center text-xs text-neutral-400">Verifying authorization...</div>;
+  }
+
+  return <div>{children}</div>;
 }
