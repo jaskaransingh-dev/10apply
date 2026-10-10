@@ -9,7 +9,6 @@ import {
   validateInvitation,
   onboardCandidateWithFile,
   onboardCandidate,
-  joinRecruiterWaitlist,
   forgotPassword,
   resetPassword,
 } from "@/lib/api";
@@ -24,25 +23,34 @@ import {
   Users,
   Building,
   KeyRound,
-  ExternalLink,
   Check,
   AlertCircle,
   X,
   Mail,
   User,
   Sparkles,
+  Terminal,
+  Palette,
+  TrendingUp,
+  BriefcaseBusiness,
+  Cog,
+  ChevronRight,
 } from "lucide-react";
 
 function LandingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  // Selected Discipline Tab for Explore Section
+  const [activeDiscipline, setActiveDiscipline] = useState<
+    "engineering" | "product" | "growth" | "sales" | "operations"
+  >("engineering");
+
   // Invite Code State
   const [inviteCode, setInviteCode] = useState("");
   const [validatingInvite, setValidatingInvite] = useState(false);
   const [inviteVerified, setInviteVerified] = useState(false);
   const [verifiedToken, setVerifiedToken] = useState("");
-  const [inviterEmail, setInviterEmail] = useState("");
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   // Candidate Onboarding State
@@ -50,6 +58,7 @@ function LandingContent() {
   const [candName, setCandName] = useState("");
   const [candEmail, setCandEmail] = useState("");
   const [candPassword, setCandPassword] = useState("");
+  const [candDiscipline, setCandDiscipline] = useState("Engineering & AI");
   const [candWorkAuth, setCandWorkAuth] = useState("Authorized to work in US (Citizen or PR)");
   const [candTargetRole, setCandTargetRole] = useState("Software Engineer");
   const [candWorkPref, setCandWorkPref] = useState("Remote");
@@ -79,19 +88,6 @@ function LandingContent() {
   const [newPasswordInput, setNewPasswordInput] = useState("");
   const [resetMode, setResetMode] = useState(false);
 
-  // Recruiter Waitlist State
-  const [recName, setRecName] = useState("");
-  const [recEmail, setRecEmail] = useState("");
-  const [recCompany, setRecCompany] = useState("");
-  const [recWebsite, setRecWebsite] = useState("");
-  const [recHiringNeeds, setRecHiringNeeds] = useState("");
-  const [recLoading, setRecLoading] = useState(false);
-  const [recSuccess, setRecSuccess] = useState<string | null>(null);
-  const [recError, setRecError] = useState<string | null>(null);
-
-  // Demo Switcher
-  const [demoLoading, setDemoLoading] = useState(false);
-
   // Check URL query parameters for invite code
   useEffect(() => {
     const codeParam = searchParams.get("code") || searchParams.get("invite");
@@ -105,7 +101,7 @@ function LandingContent() {
   const handleValidateCode = async (codeToVerify?: string) => {
     const code = (codeToVerify || inviteCode).trim();
     if (!code) {
-      setInviteError("Please enter an invitation code or use a private invite link.");
+      setInviteError("Please enter an invitation code or use a private referral link.");
       return;
     }
     setValidatingInvite(true);
@@ -115,7 +111,6 @@ function LandingContent() {
       if (res.valid) {
         setInviteVerified(true);
         setVerifiedToken(code);
-        setInviterEmail(res.inviter_email || "");
         setOnboardStep(1);
       } else {
         setInviteVerified(false);
@@ -145,7 +140,7 @@ function LandingContent() {
         formData.append("email", candEmail.trim().toLowerCase());
         formData.append("password", candPassword || "demo1234");
         formData.append("work_authorization", candWorkAuth);
-        formData.append("target_role", candTargetRole);
+        formData.append("target_role", `${candTargetRole} (${candDiscipline})`);
         formData.append("work_preference", candWorkPref);
         formData.append("primary_location", candLocation);
         formData.append("min_salary", String(parseInt(candMinSalary) || 0));
@@ -160,7 +155,7 @@ function LandingContent() {
           email: candEmail.trim().toLowerCase(),
           password: candPassword || "demo1234",
           work_authorization: candWorkAuth,
-          target_role: candTargetRole,
+          target_role: `${candTargetRole} (${candDiscipline})`,
           work_preference: candWorkPref,
           primary_location: candLocation,
           min_salary: parseInt(candMinSalary) || 0,
@@ -225,9 +220,7 @@ function LandingContent() {
     try {
       const res = await forgotPassword(forgotEmail.trim());
       setForgotSuccess(
-        res.reset_token
-          ? `Password reset instructions dispatched. For testing, your token is: ${res.reset_token}`
-          : "If an account exists with this email, password reset instructions have been dispatched."
+        "If an account exists with this email, password reset instructions have been dispatched."
       );
       if (res.reset_token) {
         setResetTokenInput(res.reset_token);
@@ -250,7 +243,7 @@ function LandingContent() {
     }
     setForgotLoading(true);
     try {
-      const res = await resetPassword(resetTokenInput.trim(), newPasswordInput);
+      await resetPassword(resetTokenInput.trim(), newPasswordInput);
       setForgotSuccess("Password updated successfully. You may now sign in with your new password.");
       setLoginEmail(forgotEmail);
       setLoginPassword(newPasswordInput);
@@ -262,74 +255,43 @@ function LandingContent() {
     }
   };
 
-  // Recruiter waitlist submission
-  const handleRecruiterWaitlist = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRecError(null);
-    setRecSuccess(null);
-    if (!recEmail.trim() || !recName.trim() || !recCompany.trim()) {
-      setRecError("Please provide your name, work email, and company name.");
-      return;
-    }
-    setRecLoading(true);
-    try {
-      const res = await joinRecruiterWaitlist({
-        name: recName.trim(),
-        email: recEmail.trim(),
-        company_name: recCompany.trim(),
-        company_website: recWebsite.trim() || undefined,
-        hiring_needs: recHiringNeeds.trim() || undefined,
-      });
-      setRecSuccess(
-        res.message || "Your recruiter access request has been submitted. We review company profiles and activate hiring accounts in batches."
-      );
-      setRecName("");
-      setRecEmail("");
-      setRecCompany("");
-      setRecWebsite("");
-      setRecHiringNeeds("");
-    } catch (err: any) {
-      setRecError(err?.message || "Failed to submit waitlist request. Please try again.");
-    } finally {
-      setRecLoading(false);
-    }
-  };
-
-  // Quick 1-click demo switcher
-  const handleQuickDemo = async (demoEmail: string, role: string) => {
-    setDemoLoading(true);
-    try {
-      const res = await api("/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: demoEmail, password: "demo1234" }),
-      });
-      saveSession(res.token, res.refresh_token, res.user, true);
-      if (role === "candidate") {
-        router.push("/candidate/jobs");
-      } else {
-        router.push("/employer");
-      }
-    } catch {
-      try {
-        await api("/demo/seed", { method: "POST" });
-        const retry = await api("/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: demoEmail, password: "demo1234" }),
-        });
-        saveSession(retry.token, retry.refresh_token, retry.user, true);
-        if (role === "candidate") {
-          router.push("/candidate/jobs");
-        } else {
-          router.push("/employer");
-        }
-      } catch (err: any) {
-        setLoginError("Could not initialize demo login. Please try again.");
-      }
-    } finally {
-      setDemoLoading(false);
-    }
+  // Discipline descriptions & sample roles
+  const disciplines = {
+    engineering: {
+      title: "Engineering & Artificial Intelligence",
+      description:
+        "Backend systems, machine learning researchers, full-stack builders, and cloud infrastructure leads building core technology for venture-backed startups.",
+      roles: ["Staff Backend Engineer", "AI/ML Systems Researcher", "Full Stack Founding Engineer", "DevOps / Infra Lead"],
+      icon: Terminal,
+    },
+    product: {
+      title: "Product & Design",
+      description:
+        "Product managers, design systems specialists, and UX leaders who define roadmaps, user journeys, and customer feedback loops.",
+      roles: ["Head of Product", "Senior Product Designer", "Technical Product Manager", "UI/UX Founding Designer"],
+      icon: Palette,
+    },
+    growth: {
+      title: "Growth & Marketing",
+      description:
+        "Demand generation experts, developer advocates, lifecycle marketers, and content strategists who accelerate early customer acquisition.",
+      roles: ["Growth Marketing Lead", "Developer Relations Engineer", "Performance Marketing Manager", "Product Marketing Specialist"],
+      icon: TrendingUp,
+    },
+    sales: {
+      title: "Sales & Business Development",
+      description:
+        "Founding account executives, enterprise sellers, and strategic partnership leads closing pilot contracts and scaling startup revenue.",
+      roles: ["Founding Account Executive", "Head of Business Development", "Strategic Partnerships Lead", "Enterprise Sales Director"],
+      icon: BriefcaseBusiness,
+    },
+    operations: {
+      title: "Operations & Strategy",
+      description:
+        "Chief of staff, BizOps generalists, and talent leaders scaling startup execution from zero to one and through growth milestones.",
+      roles: ["Chief of Staff", "BizOps Manager", "Head of People & Talent", "Startup Operations Generalist"],
+      icon: Cog,
+    },
   };
 
   return (
@@ -340,7 +302,7 @@ function LandingContent() {
           <div className="flex items-center gap-3">
             <span className="text-xl font-bold tracking-tight text-white">rec</span>
             <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded">
-              private network
+              private talent network
             </span>
           </div>
 
@@ -348,9 +310,12 @@ function LandingContent() {
             <a href="#candidate-access" className="text-zinc-400 hover:text-white transition-colors">
               Have an Invite?
             </a>
-            <a href="#recruiter-access" className="text-zinc-400 hover:text-white transition-colors">
-              Recruiter Access
-            </a>
+            <Link
+              href="/recruiters/waitlist"
+              className="text-zinc-400 hover:text-white transition-colors"
+            >
+              Recruiter Waitlist
+            </Link>
             <a
               href="#sign-in"
               className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 transition-colors"
@@ -366,23 +331,105 @@ function LandingContent() {
         <div className="max-w-5xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-zinc-800 bg-zinc-900/60 text-xs text-zinc-400 mb-6">
             <Shield className="w-3.5 h-3.5 text-zinc-300" />
-            <span>Strictly Invite-Only Candidate Network</span>
+            <span>Built for Passive Candidates & Stealth Job Switchers</span>
             <span className="text-zinc-600">&bull;</span>
-            <span className="text-zinc-300">10:00 AM Automated Submissions</span>
+            <span className="text-zinc-300">Daily 10:00 AM Automated Matching</span>
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-white max-w-3xl mx-auto leading-tight">
-            The private candidate network. Dispatched daily at 10:00 AM.
+            The private talent network for funded startups.
           </h1>
 
           <p className="mt-6 text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-            Upload your resume once. Our matching engine pairs you with relevant startup roles and submits your applications every morning.
-            No job board browsing. No public profiles.
+            Upload your resume once. Our matching engine discreetly pairs you with top startup roles across Engineering, AI, Product, Marketing, Sales, and Operations.
+            Every morning at 10:00 AM, applications are dispatched automatically.
           </p>
+
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-4 text-xs font-medium">
+            <a
+              href="#candidate-access"
+              className="px-5 py-2.5 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center gap-2"
+            >
+              Enter Single-Use Invite Code <ArrowRight className="w-3.5 h-3.5" />
+            </a>
+            <Link
+              href="/recruiters/waitlist"
+              className="px-5 py-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 hover:border-zinc-700 transition-colors flex items-center gap-2"
+            >
+              Request Recruiter Platform Access <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
       </section>
 
-      {/* Main Dual Workspaces: Candidate Code Gate vs Direct Member Sign In */}
+      {/* Target Disciplines Showcase */}
+      <section className="py-14 px-6 border-b border-zinc-800/60 max-w-6xl mx-auto w-full">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">
+              Cross-Functional Startup Talent
+            </span>
+            <h2 className="text-xl font-bold text-white mt-1">
+              Curated for all core startup functions
+            </h2>
+          </div>
+          <p className="text-xs text-zinc-400 max-w-md">
+            Whether you build systems, lead products, drive growth, or run operations, rec connects verified startup operators directly to founders.
+          </p>
+        </div>
+
+        {/* Discipline Tabs */}
+        <div className="flex flex-wrap gap-2 mb-6 border-b border-zinc-800 pb-4">
+          {(
+            [
+              ["engineering", "Engineering & AI"],
+              ["product", "Product & Design"],
+              ["growth", "Growth & Marketing"],
+              ["sales", "Sales & Business Dev"],
+              ["operations", "Operations & Strategy"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setActiveDiscipline(key)}
+              className={`text-xs px-3.5 py-1.5 rounded-md transition-colors ${
+                activeDiscipline === key
+                  ? "bg-zinc-100 text-zinc-950 font-semibold"
+                  : "bg-zinc-900 text-zinc-400 hover:text-zinc-200 border border-zinc-800"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Selected Discipline Card */}
+        <div className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/40 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+          <div className="md:col-span-8 space-y-2">
+            <h3 className="text-lg font-semibold text-white">
+              {disciplines[activeDiscipline].title}
+            </h3>
+            <p className="text-xs text-zinc-400 leading-relaxed max-w-2xl">
+              {disciplines[activeDiscipline].description}
+            </p>
+          </div>
+          <div className="md:col-span-4 border-t md:border-t-0 md:border-l border-zinc-800 pt-4 md:pt-0 md:pl-6 space-y-2">
+            <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider block">
+              Typical Roles Matched
+            </span>
+            <ul className="space-y-1 text-xs text-zinc-300">
+              {disciplines[activeDiscipline].roles.map((r, i) => (
+                <li key={i} className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                  <span>{r}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Main Dual Workspace: Candidate Invite Gate vs Direct Member Sign In */}
       <section className="py-16 px-6 max-w-6xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-10">
         {/* Left Column: Candidate Invite Gate (Strictly Requires Code) */}
         <div id="candidate-access" className="lg:col-span-7 flex flex-col justify-start">
@@ -392,7 +439,7 @@ function LandingContent() {
                 <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">Candidate Network</span>
                 <h2 className="text-xl font-semibold text-white mt-1">Join via Single-Use Invitation</h2>
               </div>
-              <span className="px-2.5 py-1 rounded text-xs font-medium bg-zinc-800/80 text-zinc-300 border border-zinc-700/60">
+              <span className="px-2.5 py-1 rounded text-xs font-medium bg-zinc-800/80 text-zinc-300 border border-zinc-700/60 font-mono">
                 Code Required
               </span>
             </div>
@@ -402,7 +449,7 @@ function LandingContent() {
               <div>
                 <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
                   Candidate access is strictly gated by single-use invitation tokens. Each approved member receives 5 invites for trusted peers.
-                  Public waitlists and open registrations are disabled.
+                  Public waitlists and open candidate browsing are disabled.
                 </p>
 
                 <form onSubmit={(e) => { e.preventDefault(); handleValidateCode(); }} className="space-y-4">
@@ -487,7 +534,7 @@ function LandingContent() {
                         : "bg-zinc-950/40 border-zinc-800/80 text-zinc-500"
                     }`}
                   >
-                    2. Work Auth
+                    2. Role & Auth
                   </button>
                   <button
                     type="button"
@@ -559,7 +606,7 @@ function LandingContent() {
                           }}
                           className="px-4 py-2 rounded-lg text-xs font-medium bg-zinc-100 text-zinc-950 hover:bg-white flex items-center gap-1.5"
                         >
-                          Continue to Work Auth <ArrowRight className="w-3.5 h-3.5" />
+                          Continue to Discipline & Auth <ArrowRight className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -568,6 +615,37 @@ function LandingContent() {
                   {/* Step 2: Work Authorization & Matching Preferences */}
                   {onboardStep === 2 && (
                     <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                            Primary Discipline
+                          </label>
+                          <select
+                            value={candDiscipline}
+                            onChange={(e) => setCandDiscipline(e.target.value)}
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500"
+                          >
+                            <option value="Engineering & AI">Engineering & AI</option>
+                            <option value="Product & Design">Product & Design</option>
+                            <option value="Growth & Marketing">Growth & Marketing</option>
+                            <option value="Sales & Business Dev">Sales & Business Dev</option>
+                            <option value="Operations & Strategy">Operations & Strategy</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                            Target Role Title
+                          </label>
+                          <input
+                            type="text"
+                            value={candTargetRole}
+                            onChange={(e) => setCandTargetRole(e.target.value)}
+                            placeholder="e.g. Senior Backend Engineer"
+                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+                          />
+                        </div>
+                      </div>
+
                       <div>
                         <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
                           Work Authorization Status
@@ -585,22 +663,10 @@ function LandingContent() {
                         </select>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <div>
                           <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                            Target Role / Headline
-                          </label>
-                          <input
-                            type="text"
-                            value={candTargetRole}
-                            onChange={(e) => setCandTargetRole(e.target.value)}
-                            placeholder="Senior Backend Engineer"
-                            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                            Work Arrangement
+                            Arrangement
                           </label>
                           <select
                             value={candWorkPref}
@@ -610,15 +676,12 @@ function LandingContent() {
                             <option value="Remote">Remote Only</option>
                             <option value="Hybrid">Hybrid</option>
                             <option value="On-site">On-site</option>
-                            <option value="Any">Any Arrangement</option>
+                            <option value="Any">Any</option>
                           </select>
                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                            Primary Location
+                            Location
                           </label>
                           <input
                             type="text"
@@ -630,7 +693,7 @@ function LandingContent() {
                         </div>
                         <div>
                           <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                            Minimum Salary (USD)
+                            Min Salary ($)
                           </label>
                           <input
                             type="number"
@@ -856,153 +919,46 @@ function LandingContent() {
               </button>
             </form>
 
-            {/* Quick Demo Switcher */}
+            {/* Recruiter Prompt Card */}
             <div className="mt-8 pt-6 border-t border-zinc-800/80">
-              <span className="block text-xs font-mono text-zinc-500 uppercase tracking-wider mb-3">
-                1-Click Testing Demos
+              <span className="block text-xs font-mono text-zinc-500 uppercase tracking-wider mb-2">
+                Hiring For Your Startup?
               </span>
-              <div className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  disabled={demoLoading}
-                  onClick={() => handleQuickDemo("alex.backend@example.com", "candidate")}
-                  className="w-full py-2 px-3 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-950/60 text-left flex items-center justify-between text-xs text-zinc-300 hover:text-white transition-colors"
-                >
-                  <span>Alex Chen &bull; Backend Engineer</span>
-                  <span className="font-mono text-zinc-500">Candidate Demo &rarr;</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={demoLoading}
-                  onClick={() => handleQuickDemo("elena.datascience@example.com", "candidate")}
-                  className="w-full py-2 px-3 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-950/60 text-left flex items-center justify-between text-xs text-zinc-300 hover:text-white transition-colors"
-                >
-                  <span>Elena Rostova &bull; Senior Data Scientist</span>
-                  <span className="font-mono text-zinc-500">Candidate Demo &rarr;</span>
-                </button>
-                <button
-                  type="button"
-                  disabled={demoLoading}
-                  onClick={() => handleQuickDemo("founder@apexfoundry.example.com", "employer")}
-                  className="w-full py-2 px-3 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-950/60 text-left flex items-center justify-between text-xs text-zinc-300 hover:text-white transition-colors"
-                >
-                  <span>Apex Foundry &bull; Founder / Recruiter</span>
-                  <span className="font-mono text-zinc-500">Recruiter Demo &rarr;</span>
-                </button>
-              </div>
+              <p className="text-xs text-zinc-400 leading-relaxed mb-4">
+                Recruiter access is reviewed and granted in batches. Discover vetted candidates with parsed resumes and match breakdowns.
+              </p>
+              <Link
+                href="/recruiters/waitlist"
+                className="w-full py-2.5 px-3.5 rounded-lg border border-zinc-800 hover:border-zinc-700 bg-zinc-950/80 text-center flex items-center justify-center gap-2 text-xs font-medium text-zinc-200 hover:text-white transition-colors"
+              >
+                <span>Join the Recruiter Waitlist</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Recruiter Waitlist Section */}
-      <section id="recruiter-access" className="py-16 px-6 border-t border-zinc-800/80 bg-zinc-900/20">
-        <div className="max-w-4xl mx-auto">
-          <div className="p-8 sm:p-10 rounded-xl border border-zinc-800 bg-zinc-900/40">
-            <div className="max-w-2xl mb-8">
-              <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">For Founders & Hiring Teams</span>
-              <h2 className="text-2xl font-bold text-white mt-1.5">Request Recruiter Platform Access</h2>
-              <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
-                Recruiter access is reviewed and activated in batches. Join the recruiter waitlist with your work email and company name to discover vetted candidates with deterministic match scores and parsed resumes.
-              </p>
-            </div>
-
-            <form onSubmit={handleRecruiterWaitlist} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Your Full Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={recName}
-                    onChange={(e) => setRecName(e.target.value)}
-                    placeholder="Sarah Jenkins"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Work Email Address
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={recEmail}
-                    onChange={(e) => setRecEmail(e.target.value)}
-                    placeholder="sarah@startup.com"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Company Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={recCompany}
-                    onChange={(e) => setRecCompany(e.target.value)}
-                    placeholder="Foundry Labs"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Company Website (Optional)
-                  </label>
-                  <input
-                    type="url"
-                    value={recWebsite}
-                    onChange={(e) => setRecWebsite(e.target.value)}
-                    placeholder="https://foundrylabs.com"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                  Current Hiring Needs & Target Roles (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={recHiringNeeds}
-                  onChange={(e) => setRecHiringNeeds(e.target.value)}
-                  placeholder="e.g. Hiring 2 Senior Backend Engineers and 1 ML Researcher"
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3.5 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-                />
-              </div>
-
-              {recSuccess && (
-                <div className="p-4 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                  <span>{recSuccess}</span>
-                </div>
-              )}
-
-              {recError && (
-                <div className="p-3 rounded-lg bg-red-950/40 border border-red-800/60 text-red-300 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-                  <span>{recError}</span>
-                </div>
-              )}
-
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={recLoading}
-                  className="px-6 py-2.5 rounded-lg text-sm font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors disabled:opacity-50"
-                >
-                  {recLoading ? "Submitting..." : "Join Recruiter Waitlist"}
-                </button>
-              </div>
-            </form>
+      {/* Recruiter Banner Direct Link */}
+      <section className="py-14 px-6 border-t border-zinc-800/80 bg-zinc-900/20">
+        <div className="max-w-5xl mx-auto p-8 rounded-xl border border-zinc-800 bg-zinc-900/40 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="space-y-1.5 text-center md:text-left">
+            <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">
+              For Startup Founders & Hiring Managers
+            </span>
+            <h2 className="text-xl font-bold text-white">
+              Looking to hire top operators for your team?
+            </h2>
+            <p className="text-xs text-zinc-400 max-w-xl">
+              Access high-signal candidates who aren't applying on public boards. Review transparent match explanations and message candidates directly.
+            </p>
           </div>
+          <Link
+            href="/recruiters/waitlist"
+            className="px-5 py-2.5 rounded-lg text-xs font-semibold bg-zinc-100 hover:bg-white text-zinc-950 whitespace-nowrap transition-colors flex items-center gap-2"
+          >
+            Apply for Recruiter Access <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </section>
 
@@ -1180,7 +1136,7 @@ function LandingContent() {
           <div>
             <span className="text-sm font-bold text-white tracking-tight">rec</span>
             <p className="mt-2 text-zinc-500 leading-relaxed">
-              Private candidate network and startup matching engine.
+              The private talent network for funded startups.
             </p>
           </div>
           <div>
@@ -1194,24 +1150,25 @@ function LandingContent() {
           <div>
             <span className="font-mono uppercase text-zinc-400 tracking-wider block mb-3">Hiring Teams</span>
             <ul className="space-y-2 text-zinc-500">
-              <li><a href="#recruiter-access" className="hover:text-zinc-300">Recruiter Waitlist</a></li>
+              <li><Link href="/recruiters/waitlist" className="hover:text-zinc-300">Recruiter Waitlist</Link></li>
               <li><Link href="/employer" className="hover:text-zinc-300">Candidate Pipeline</Link></li>
               <li><Link href="/employer/jobs/new" className="hover:text-zinc-300">Publish Startup Job</Link></li>
             </ul>
           </div>
           <div>
-            <span className="font-mono uppercase text-zinc-400 tracking-wider block mb-3">Architecture</span>
+            <span className="font-mono uppercase text-zinc-400 tracking-wider block mb-3">Disciplines</span>
             <ul className="space-y-2 text-zinc-500">
-              <li>Deterministic Scoring Formula</li>
-              <li>Idempotent Outbox Mailer</li>
-              <li>Supabase Database & Storage</li>
+              <li>Engineering & AI / ML</li>
+              <li>Product & Design</li>
+              <li>Growth & Marketing</li>
+              <li>Sales & Operations</li>
             </ul>
           </div>
         </div>
 
         <div className="max-w-6xl mx-auto pt-6 border-t border-zinc-900 flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-600">
           <span>&copy; {new Date().getFullYear()} rec &bull; Private Network &bull; Zero Spam</span>
-          <span className="font-mono text-[11px] mt-2 sm:mt-0">Built for high-signal startup hiring</span>
+          <span className="font-mono text-[11px] mt-2 sm:mt-0">Built for passive startup hiring</span>
         </div>
       </footer>
     </div>

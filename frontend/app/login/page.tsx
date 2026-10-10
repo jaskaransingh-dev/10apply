@@ -240,44 +240,46 @@ function LoginFormContent() {
             </button>
           </form>
 
-          {/* Quick Demo Switchers */}
-          <div className="pt-4 border-t border-neutral-100 space-y-2">
-            <div className="text-[11px] text-neutral-400 uppercase tracking-wider text-center">
-              1-Click Demo Accounts
-            </div>
-            {activeRole === "candidate" ? (
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemo("alex.backend@example.com", "candidate")}
-                  disabled={loading}
-                  className="p-2 border border-neutral-200 rounded text-left hover:bg-neutral-50 transition-colors"
-                >
-                  <div className="font-semibold text-neutral-900">Alex Chen</div>
-                  <div className="text-[11px] text-neutral-500">Backend Systems</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemo("elena.datascience@example.com", "candidate")}
-                  disabled={loading}
-                  className="p-2 border border-neutral-200 rounded text-left hover:bg-neutral-50 transition-colors"
-                >
-                  <div className="font-semibold text-neutral-900">Elena Rostova</div>
-                  <div className="text-[11px] text-neutral-500">Data Science</div>
-                </button>
+          {/* Quick Demo Switchers (Internal Testing only via ?demo=true) */}
+          {searchParams.get("demo") === "true" && (
+            <div className="pt-4 border-t border-neutral-100 space-y-2">
+              <div className="text-[11px] text-neutral-400 uppercase tracking-wider text-center">
+                1-Click Testing Demos
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => handleQuickDemo("founder@apexfoundry.example.com", "recruiter")}
-                disabled={loading}
-                className="w-full p-2 border border-neutral-200 rounded text-left hover:bg-neutral-50 transition-colors"
-              >
-                <div className="font-semibold text-neutral-900">Apex Foundry (Founder)</div>
-                <div className="text-[11px] text-neutral-500">Hiring Founding Backend Engineer</div>
-              </button>
-            )}
-          </div>
+              {activeRole === "candidate" ? (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemo("alex.backend@example.com", "candidate")}
+                    disabled={loading}
+                    className="p-2 border border-neutral-200 rounded text-left hover:bg-neutral-50 transition-colors"
+                  >
+                    <div className="font-semibold text-neutral-900">Alex Chen</div>
+                    <div className="text-[11px] text-neutral-500">Backend Systems</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemo("elena.datascience@example.com", "candidate")}
+                    disabled={loading}
+                    className="p-2 border border-neutral-200 rounded text-left hover:bg-neutral-50 transition-colors"
+                  >
+                    <div className="font-semibold text-neutral-900">Elena Rostova</div>
+                    <div className="text-[11px] text-neutral-500">Data Science</div>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleQuickDemo("founder@apexfoundry.example.com", "recruiter")}
+                  disabled={loading}
+                  className="w-full p-2 border border-neutral-200 rounded text-left hover:bg-neutral-50 transition-colors"
+                >
+                  <div className="font-semibold text-neutral-900">Apex Foundry (Founder)</div>
+                  <div className="text-[11px] text-neutral-500">Hiring Founding Backend Engineer</div>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer Link */}

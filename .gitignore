@@ -13,4 +13,5 @@ backend/storage/
 storage/
 *.tsbuildinfo
 supabase/.temp/
+.wrangler/
 

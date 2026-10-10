@@ -1,8 +1,13 @@
-name = "rec-marketplace"
+name = "rec-backend"
+main = "backend/cloudflare/worker.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
-pages_build_output_dir = "./frontend/.next"
 
-# Optional environment variables
+[[d1_databases]]
+binding = "DB"
+database_name = "rec_db"
+database_id = "rec-d1-db-id"
+migrations_dir = "cloudflare/d1"
+
 [vars]
-NEXT_PUBLIC_API = "http://127.0.0.1:8000"
+ENVIRONMENT = "production"
