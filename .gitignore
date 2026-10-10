@@ -12,3 +12,5 @@ node_modules/
 backend/storage/
 storage/
 *.tsbuildinfo
+supabase/.temp/
+
