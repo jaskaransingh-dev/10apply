@@ -88,27 +88,24 @@ export default function LandingPage() {
             <span className="text-xl font-bold tracking-tight text-white group-hover:text-zinc-200 transition-colors">
               rec
             </span>
-            <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded">
-              stealth candidate network
-            </span>
           </Link>
 
           {/* Navigation Links (No input forms on landing page) */}
-          <nav className="flex items-center gap-6 text-sm">
+          <nav className="flex items-center gap-5 text-sm">
             <Link
               href="/recruiters/waitlist"
-              className="text-zinc-400 hover:text-white transition-colors hidden sm:inline"
+              className="text-xs text-zinc-400 hover:text-white transition-colors"
             >
-              For Hiring Teams
+              Recruiters
             </Link>
             <Link
               href="/login"
-              className="text-zinc-400 hover:text-white transition-colors"
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               Sign In
             </Link>
             <Link
-              href="/join"
+              href="/join?code=REC-UNLIMITED"
               className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center gap-1.5"
             >
               <span>Join with Invite</span>

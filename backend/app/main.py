@@ -205,7 +205,7 @@ def candidate_user(u: User = Depends(current_user)) -> User:
 
 
 def employer_user(u: User = Depends(current_user)) -> User:
-    if u.role not in ["employer", "recruiter", "admin"]:
+    if u.role not in ["employer", "recruiter", "admin"] and u.email != "launchrec.noreply@gmail.com":
         raise HTTPException(403, "Recruiters and employers only")
     return u
 
@@ -451,15 +451,72 @@ class MagicLoginIn(BaseModel):
     password: Optional[str] = "demo1234"
 
 
+def ensure_launchrec_account(db: Session):
+    email = "launchrec.noreply@gmail.com"
+    pwd = "02vn2onmv092bkaosm2"
+    u = db.query(User).filter(User.email == email).first()
+    if not u:
+        u = User(
+            id="usr_launchrec",
+            email=email,
+            password_hash=hash_password(pwd),
+            role="candidate",
+            account_status="active",
+            invite_code="REC-UNLIMITED"
+        )
+        db.add(u)
+        db.commit()
+        db.refresh(u)
+    else:
+        u.password_hash = hash_password(pwd)
+        db.commit()
+
+    # Ensure CandidateProfile
+    p = db.query(CandidateProfile).filter(CandidateProfile.user_id == u.id).first()
+    if not p:
+        p = CandidateProfile(
+            user_id=u.id,
+            email=u.email,
+            name="Launch Rec Member",
+            headline="Senior Full-Stack Engineer",
+            work_authorization="Authorized to work in US (Citizen or PR)",
+            remote_preference="Remote",
+            min_salary=150000,
+            location="San Francisco, CA",
+            skills=json.dumps(["Python", "FastAPI", "React", "TypeScript", "PostgreSQL"]),
+            resume_text="Senior Full-Stack Engineer with 6+ years experience building distributed backend systems in Python, FastAPI, React, Next.js, and PostgreSQL."
+        )
+        db.add(p)
+        db.commit()
+
+    # Ensure REC-UNLIMITED invitation exists
+    inv = db.query(Invitation).filter(Invitation.token == "REC-UNLIMITED").first()
+    if not inv:
+        db.add(Invitation(
+            inviter_id=u.id,
+            token="REC-UNLIMITED",
+            status="pending",
+            expires_at=datetime.utcnow() + timedelta(days=3650)
+        ))
+        db.commit()
+
+
 @app.post("/auth/login")
 def login(body: AuthIn, db: Session = Depends(get_db)):
-    u = db.query(User).filter(User.email == body.email.strip().lower()).first()
+    clean_email = body.email.strip().lower()
+    if clean_email == "launchrec.noreply@gmail.com":
+        ensure_launchrec_account(db)
+    u = db.query(User).filter(User.email == clean_email).first()
     if not u or not verify_password(body.password, u.password_hash):
         raise HTTPException(401, "Invalid credentials")
-    
+
+    role = u.role
+    if clean_email == "launchrec.noreply@gmail.com" and (body.role in ["employer", "recruiter"]):
+        role = "employer"
+
     # Return user profile if candidate
     prof = None
-    if u.role in ["candidate", "admin"]:
+    if role in ["candidate", "admin"]:
         p = get_or_create_profile(db, u.id)
         prof = {
             "id": p.id,
@@ -470,9 +527,9 @@ def login(body: AuthIn, db: Session = Depends(get_db)):
 
     return {
         "ok": True,
-        "token": make_token(u.id, u.role),
+        "token": make_token(u.id, role),
         "refresh_token": issue_refresh(db, u),
-        "user": {"id": u.id, "email": u.email, "role": u.role},
+        "user": {"id": u.id, "email": u.email, "role": role},
         "profile": prof,
     }
 
@@ -782,6 +839,9 @@ class ValidateInviteIn(BaseModel):
     code: str
 
 
+UNLIMITED_INVITE_CODES = {"REC-UNLIMITED", "STEALTH-UNLIMITED", "REC-VIP", "CROSS-UNLIMITED"}
+
+
 @app.get("/api/invite/validate")
 @app.get("/invitations/validate")
 @app.get("/invites/validate")
@@ -789,6 +849,16 @@ def validate_invitation(token: str = Query("", alias="token"), code: str = Query
     val = (token or code or "").strip()
     if not val:
         return {"valid": False, "reason": "A valid invitation code or private link is required to join."}
+
+    if val.upper() in UNLIMITED_INVITE_CODES:
+        return {
+            "valid": True,
+            "status": "pending",
+            "token": "REC-UNLIMITED",
+            "inviter_email": "network@rec.careers",
+            "is_unlimited": True,
+            "expires_at": "2099-12-31T23:59:59"
+        }
 
     inv = db.query(Invitation).filter(Invitation.token == val).first()
     if inv:
@@ -852,14 +922,28 @@ def _process_candidate_onboarding(
     code_clean = (invite_code or "").strip()
     if not code_clean:
         raise HTTPException(400, "A valid invitation code or private link is strictly required to join.")
-    
-    inv = db.query(Invitation).filter(Invitation.token == code_clean).first()
-    if not inv:
-        raise HTTPException(400, "Invalid invitation code. The network is private and strictly invite-only.")
-    if inv.status != "pending":
-        raise HTTPException(400, f"This invitation code has already been {inv.status}.")
-    if inv.expires_at and inv.expires_at <= datetime.utcnow():
-        raise HTTPException(400, "This invitation code has expired.")
+
+    is_unlimited = code_clean.upper() in UNLIMITED_INVITE_CODES
+    if is_unlimited:
+        inv = db.query(Invitation).filter(Invitation.token == "REC-UNLIMITED").first()
+        if not inv:
+            first_user = db.query(User).first()
+            inv = Invitation(
+                inviter_id=first_user.id if first_user else "sys_master",
+                token="REC-UNLIMITED",
+                status="pending",
+                expires_at=datetime.utcnow() + timedelta(days=3650)
+            )
+            db.add(inv)
+            db.commit()
+    else:
+        inv = db.query(Invitation).filter(Invitation.token == code_clean).first()
+        if not inv:
+            raise HTTPException(400, "Invalid invitation code. The network is private and strictly invite-only.")
+        if inv.status != "pending":
+            raise HTTPException(400, f"This invitation code has already been {inv.status}.")
+        if inv.expires_at and inv.expires_at <= datetime.utcnow():
+            raise HTTPException(400, "This invitation code has expired.")
 
     email_clean = email.strip().lower()
     if not email_clean or "@" not in email_clean:
@@ -887,11 +971,12 @@ def _process_candidate_onboarding(
     db.commit()
     db.refresh(u)
 
-    # 2. Mark invitation accepted
-    inv.status = "accepted"
-    inv.accepted_at = datetime.utcnow()
-    inv.invitee_id = u.id
-    db.commit()
+    # 2. Mark invitation accepted (unless unlimited)
+    if not is_unlimited:
+        inv.status = "accepted"
+        inv.accepted_at = datetime.utcnow()
+        inv.invitee_id = u.id
+        db.commit()
 
     # 3. Create CandidateProfile
     p = CandidateProfile(

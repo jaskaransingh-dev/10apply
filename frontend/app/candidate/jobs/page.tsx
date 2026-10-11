@@ -1,531 +1,438 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getCandidateJobs, trigger10amDispatch, salaryRange } from "@/lib/api";
+import {
+  getCandidateJobs,
+  getCandidateProfile,
+  updateCandidateProfile,
+  uploadResumeFile,
+  trigger10amDispatch,
+  salaryRange,
+} from "@/lib/api";
 import {
   Briefcase,
   Building,
   MapPin,
   DollarSign,
-  MessageSquare,
-  ArrowUpRight,
   CheckCircle2,
   Clock,
-  X,
-  Share2,
   Copy,
   Check,
-  Send,
+  FileText,
+  Upload,
+  Shield,
+  ArrowRight,
+  AlertCircle,
   Sparkles,
-  RefreshCw,
-  ExternalLink
 } from "lucide-react";
 
-export default function CandidateJobsPage() {
+export default function CandidateDashboardPage() {
   const router = useRouter();
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [inviteStats, setInviteStats] = useState<any>({ remaining: 5, invites: [] });
-  const [dailyDispatch, setDailyDispatch] = useState<any>({
-    hour: 10,
-    status: "Active",
-    next_dispatch: "Tomorrow at 10:00 AM",
-    dispatched_today: 0,
-  });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dashboard Data State
   const [loading, setLoading] = useState(true);
-  const [running10am, setRunning10am] = useState(false);
+  const [jobs, setJobs] = useState<any[]>([]);
+  const [profile, setProfile] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedJob, setSelectedJob] = useState<any | null>(null);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteSending, setInviteSending] = useState(false);
-  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+
+  // Profile Edit State
+  const [targetRole, setTargetRole] = useState("");
+  const [workAuth, setWorkAuth] = useState("");
+  const [workPref, setWorkPref] = useState("Remote");
+  const [minSalary, setMinSalary] = useState("140000");
+  const [location, setLocation] = useState("San Francisco, CA");
+  const [updatingProfile, setUpdatingProfile] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+
+  // Resume Upload State
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [resumeSuccess, setResumeSuccess] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+
+  // Copy Unlimited Invite Link State
+  const [copiedUnlimited, setCopiedUnlimited] = useState(false);
 
   useEffect(() => {
-    loadDispatches();
+    loadDashboard();
   }, []);
 
-  const loadDispatches = async () => {
+  const loadDashboard = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getCandidateJobs();
-      setJobs(res.jobs || []);
-      if (res.invite_stats) {
-        setInviteStats(res.invite_stats);
-      }
-      if (res.daily_dispatch) {
-        setDailyDispatch(res.daily_dispatch);
+      const [jRes, pRes] = await Promise.all([
+        getCandidateJobs().catch(() => ({ jobs: [] })),
+        getCandidateProfile().catch(() => ({ profile: null })),
+      ]);
+
+      setJobs(jRes.jobs || []);
+      if (pRes?.profile) {
+        setProfile(pRes.profile);
+        setTargetRole(pRes.profile.headline || "Senior Full-Stack Engineer");
+        setWorkAuth(pRes.profile.work_authorization || "Authorized to work in US (Citizen or PR)");
+        setWorkPref(pRes.profile.remote_preference || "Remote");
+        setMinSalary(String(pRes.profile.min_salary || 140000));
+        setLocation(pRes.profile.location || "San Francisco, CA");
       }
     } catch (err: any) {
-      setError(err?.message || "Failed to load dispatches.");
+      setError(err?.message || "Failed to load dashboard.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleTrigger10am = async () => {
-    setRunning10am(true);
-    try {
-      await trigger10amDispatch();
-      await loadDispatches();
-    } catch (err: any) {
-      alert(err?.message || "Could not trigger 10 AM dispatch.");
-    } finally {
-      setRunning10am(false);
-    }
-  };
-
-  const primaryInviteCode =
-    inviteStats?.invites?.[0]?.token || "cross_c94c58";
-  const inviteLink =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/?invite=${primaryInviteCode}`
-      : `http://localhost:3000/?invite=${primaryInviteCode}`;
-
-  const handleCopyInvite = () => {
-    navigator.clipboard.writeText(inviteLink);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
-  };
-
-  const handleSendInvite = async (e: React.FormEvent) => {
+  const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inviteEmail.trim()) return;
-    setInviteSending(true);
-    setInviteSuccess(null);
+    setUpdatingProfile(true);
+    setProfileSuccess(null);
     try {
-      const res = await fetch("http://127.0.0.1:8000/invitations/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        },
-        body: JSON.stringify({ recipient_email: inviteEmail.trim() }),
+      await updateCandidateProfile({
+        headline: targetRole,
+        work_authorization: workAuth,
+        remote_preference: workPref,
+        min_salary: Number(minSalary) || 0,
+        location,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to create invite");
-      setInviteSuccess(`Invitation code sent to ${inviteEmail.trim()}`);
-      setInviteEmail("");
-      loadDispatches();
+      setProfileSuccess("Profile information updated successfully.");
+      setTimeout(() => setProfileSuccess(null), 3000);
     } catch (err: any) {
-      alert(err.message || "Failed to send invite");
+      alert(err?.message || "Failed to update profile.");
     } finally {
-      setInviteSending(false);
+      setUpdatingProfile(false);
     }
   };
 
-  const statusBadge = (status: string) => {
-    switch (status) {
-      case "recruiter_contacted":
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-900 text-white">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            Recruiter contacted you
-          </span>
-        );
-      case "in_review":
-      case "submitted":
-      case "submitted_10am":
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-800 border border-emerald-200">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            Submitted at 10:00 AM
-          </span>
-        );
-      case "interviewing":
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800">
-            Interviewing
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-700">
-            <Clock className="w-3 h-3 text-neutral-400" />
-            Dispatched at 10:00 AM
-          </span>
-        );
+  const handleResumeFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingResume(true);
+    setResumeError(null);
+    setResumeSuccess(null);
+
+    try {
+      await uploadResumeFile(file);
+      setResumeSuccess(`Resume updated successfully (${file.name}).`);
+      await loadDashboard();
+      setTimeout(() => setResumeSuccess(null), 4000);
+    } catch (err: any) {
+      setResumeError(err?.message || "Failed to upload resume.");
+    } finally {
+      setUploadingResume(false);
     }
+  };
+
+  const handleCopyUnlimited = () => {
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://discovered-site.vercel.app";
+    const link = `${origin}/join?code=REC-UNLIMITED`;
+    navigator.clipboard.writeText(link);
+    setCopiedUnlimited(true);
+    setTimeout(() => setCopiedUnlimited(false), 2500);
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-      {/* Top Section: Private Invitations Bar */}
-      <div className="bg-white border border-neutral-200 rounded-lg p-5 space-y-3 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-neutral-500">
-                Private Candidate Network
-              </span>
-              <span className="px-2 py-0.5 text-[11px] font-semibold bg-neutral-100 text-neutral-900 rounded">
-                {inviteStats?.remaining ?? 5} invites remaining
-              </span>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-zinc-800 selection:text-white">
+      <main className="flex-1 py-10 px-6 max-w-5xl mx-auto w-full space-y-8">
+        {/* Core Hero Status Card: "You're all done!" */}
+        <div className="p-8 sm:p-10 rounded-2xl border border-zinc-800 bg-zinc-900/40 shadow-sm space-y-6 relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-emerald-900 bg-emerald-950/40 text-emerald-400 text-xs font-mono">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Daily 10:00 AM Dispatch Loop: Active</span>
             </div>
-            <p className="text-xs text-neutral-600 mt-1">
-              Every approved candidate receives 5 invites. Share your link with qualified peers to grant priority access to daily 10 AM matching.
+            <div className="text-xs font-mono text-zinc-500">
+              Account: <span className="text-zinc-300 font-semibold">{profile?.email || "launchrec.noreply@gmail.com"}</span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight">
+              You&apos;re all done!
+            </h1>
+            <p className="text-sm sm:text-base text-zinc-400 leading-relaxed max-w-2xl">
+              Your candidate profile is active and verified. Every morning at 10:00 AM, our deterministic matching engine evaluates live startup openings and dispatches up to 10 tailored applications on your behalf.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+            <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+              <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider block">
+                Next Automated Dispatch
+              </span>
+              <span className="text-lg font-bold text-white mt-1 block">
+                Tomorrow at 10:00 AM
+              </span>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                10 matching startup roles queued
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+              <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider block">
+                Employer Shield
+              </span>
+              <span className="text-lg font-bold text-emerald-400 mt-1 block">
+                Protected
+              </span>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Current employer blocked from discovery
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+              <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider block">
+                Master Invitation Token
+              </span>
+              <span className="text-lg font-bold text-zinc-200 mt-1 block font-mono">
+                REC-UNLIMITED
+              </span>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Unlimited uses for colleagues
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Master Unlimited Invite Link Banner */}
+        <div className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <span className="text-xs font-mono uppercase tracking-wider text-zinc-400">
+              Share Unlimited Candidate Invite
+            </span>
+            <p className="text-xs text-zinc-400">
+              Colleagues can join using key <code className="text-zinc-200 font-mono">REC-UNLIMITED</code> without invite caps.
             </p>
           </div>
           <button
-            type="button"
-            onClick={handleCopyInvite}
-            className="btn btn-outline text-xs gap-1.5 shrink-0 self-start sm:self-center"
+            onClick={handleCopyUnlimited}
+            className="px-4 py-2.5 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 transition-colors flex items-center gap-2 shrink-0"
           >
-            {copiedLink ? (
+            {copiedUnlimited ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Link Copied</span>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Copied Link</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5 text-neutral-500" />
-                <span>Copy Invite Link</span>
+                <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Copy Unlimited Invite Link</span>
               </>
             )}
           </button>
         </div>
 
-        {/* Quick invite email sender */}
-        <form onSubmit={handleSendInvite} className="flex flex-col sm:flex-row gap-2 pt-1">
-          <input
-            type="email"
-            value={inviteEmail}
-            onChange={(e) => setInviteEmail(e.target.value)}
-            placeholder="Invite a friend by email (e.g. colleague@example.com)"
-            className="flex-1 px-3 py-1.5 text-xs border border-neutral-200 rounded-md bg-white text-neutral-900 focus:outline-none focus:border-neutral-900 placeholder:text-neutral-400"
-          />
-          <button
-            type="submit"
-            disabled={inviteSending || (inviteStats?.remaining ?? 5) <= 0}
-            className="btn btn-primary text-xs shrink-0 disabled:opacity-40"
-          >
-            <Send className="w-3 h-3 mr-1" />
-            <span>{inviteSending ? "Sending..." : "Send Invite"}</span>
-          </button>
-        </form>
-        {inviteSuccess && (
-          <p className="text-[11px] text-emerald-700 font-medium">{inviteSuccess}</p>
-        )}
-      </div>
-
-      {/* 10:00 AM Automated Engine Status Banner */}
-      <div className="bg-neutral-900 text-white rounded-lg p-5 shadow-sm space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <h2 className="text-sm font-semibold tracking-tight text-white">
-                Daily 10:00 AM Automated Submissions
-              </h2>
+        {/* Two MVP Action Cards: Update Resume & Update Profile Info */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Card 1: Update Resume */}
+          <div className="lg:col-span-5 p-6 rounded-xl border border-zinc-800 bg-zinc-900/40 space-y-5">
+            <div className="border-b border-zinc-800 pb-4">
+              <h2 className="text-base font-semibold text-white">Update Resume</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Replace your active resume anytime. Our engine re-indexes skills immediately.
+              </p>
             </div>
-            <p className="text-xs text-neutral-300 leading-relaxed max-w-xl">
-              Candidates do not need to search or submit job applications manually. Every morning at 10:00 AM, the matching engine pairs your verified resume with active startup roles and submits your profile to the top 10 matching jobs.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
+
+            <div className="p-4 rounded-lg bg-zinc-950/60 border border-zinc-800/80 space-y-2">
+              <div className="flex items-center gap-2 text-xs text-zinc-300 font-medium">
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <span>Active Resume on File</span>
+              </div>
+              <p className="text-xs text-zinc-500">
+                PDF / DOCX verified &bull; Skills extracted for daily 10 AM matching
+              </p>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.txt"
+              onChange={handleResumeFileSelect}
+              className="hidden"
+            />
+
+            {resumeSuccess && (
+              <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{resumeSuccess}</span>
+              </div>
+            )}
+
+            {resumeError && (
+              <div className="p-3 rounded-lg bg-red-950/40 border border-red-800 text-red-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                <span>{resumeError}</span>
+              </div>
+            )}
+
             <button
-              onClick={handleTrigger10am}
-              disabled={running10am}
-              className="px-3 py-1.5 text-xs font-medium bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 rounded-md transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingResume}
+              className="w-full py-2.5 rounded-lg text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${running10am ? "animate-spin" : ""}`} />
-              <span>{running10am ? "Matching..." : "Simulate 10 AM Run Now"}</span>
+              <Upload className="w-3.5 h-3.5" />
+              <span>{uploadingResume ? "Uploading & Re-indexing..." : "Upload New Resume File"}</span>
             </button>
           </div>
-        </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 border-t border-neutral-800 text-xs">
-          <div>
-            <div className="text-neutral-400 text-[11px]">Today's Dispatches</div>
-            <div className="text-sm font-semibold text-white mt-0.5">
-              {jobs.length} / 10 jobs sent
+          {/* Card 2: Update Profile Information */}
+          <div className="lg:col-span-7 p-6 rounded-xl border border-zinc-800 bg-zinc-900/40 space-y-5">
+            <div className="border-b border-zinc-800 pb-4">
+              <h2 className="text-base font-semibold text-white">Update Matching Info</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Adjust criteria for daily 10:00 AM startup applications.
+              </p>
             </div>
-          </div>
-          <div>
-            <div className="text-neutral-400 text-[11px]">Next Dispatch</div>
-            <div className="text-sm font-semibold text-white mt-0.5">
-              {dailyDispatch?.next_dispatch || "Tomorrow at 10:00 AM"}
-            </div>
-          </div>
-          <div>
-            <div className="text-neutral-400 text-[11px]">Submission Mode</div>
-            <div className="text-sm font-semibold text-emerald-400 mt-0.5">
-              Automated (10/day)
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Dispatched Applications Header */}
-      <div className="flex items-center justify-between pt-2">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight text-neutral-900">
-            Today's 10 AM Dispatched Applications
-          </h2>
-          <p className="text-xs text-neutral-500">
-            Ranked deterministically by 5-component score: skills, experience, recency, projects, and domain fit.
-          </p>
-        </div>
-        <Link
-          href="/candidate/upload"
-          className="text-xs font-medium text-neutral-700 hover:text-neutral-900 px-3 py-1.5 border border-neutral-200 rounded-md hover:bg-neutral-50 transition-colors shrink-0"
-        >
-          Update Resume
-        </Link>
-      </div>
-
-      {error && (
-        <div className="p-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md">
-          {error}
-        </div>
-      )}
-
-      {/* Dispatched Applications List */}
-      {loading ? (
-        <div className="py-16 text-center text-xs text-neutral-400">
-          Loading 10 AM dispatches...
-        </div>
-      ) : jobs.length === 0 ? (
-        <div className="py-16 text-center space-y-3 bg-white border border-neutral-200 rounded-lg p-8">
-          <Briefcase className="w-8 h-8 text-neutral-400 mx-auto" />
-          <h3 className="text-sm font-semibold text-neutral-800">
-            No dispatches scheduled yet
-          </h3>
-          <p className="text-xs text-neutral-500 max-w-sm mx-auto">
-            Upload your resume to activate 10:00 AM automated matching. Your profile will be submitted to 10 matching jobs every morning.
-          </p>
-          <div className="pt-2 flex justify-center gap-3">
-            <Link href="/candidate/upload" className="btn btn-primary text-xs">
-              Upload Resume
-            </Link>
-            <button
-              onClick={handleTrigger10am}
-              className="btn btn-outline text-xs"
-            >
-              Run 10 AM Match Now
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {jobs.map((job) => (
-            <div
-              key={job.id}
-              onClick={() => setSelectedJob(job)}
-              className="group bg-white border border-neutral-200 hover:border-neutral-400 rounded-lg p-4 sm:p-5 transition-all cursor-pointer shadow-sm"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base font-semibold text-neutral-900 group-hover:text-neutral-950">
-                      {job.title}
-                    </h3>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-neutral-100 text-neutral-800">
-                      {job.match_score}% match
-                    </span>
-                    {statusBadge(job.application_status)}
-                  </div>
-
-                  <div className="flex items-center gap-4 text-xs text-neutral-500 flex-wrap">
-                    <span className="flex items-center gap-1 font-medium text-neutral-700">
-                      <Building className="w-3.5 h-3.5 text-neutral-400" />
-                      {job.company}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 text-neutral-400" />
-                      {job.location} ({job.remote_policy})
-                    </span>
-                    {job.salary_min > 0 && (
-                      <span className="flex items-center gap-1">
-                        <DollarSign className="w-3.5 h-3.5 text-neutral-400" />
-                        {salaryRange(job.salary_min, job.salary_max, job.currency)}
-                      </span>
-                    )}
-                  </div>
+            <form onSubmit={handleUpdateProfile} className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Target Role Title
+                  </label>
+                  <input
+                    type="text"
+                    value={targetRole}
+                    onChange={(e) => setTargetRole(e.target.value)}
+                    placeholder="Senior Full-Stack Engineer"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-zinc-500"
+                  />
                 </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-                  {job.application_status === "recruiter_contacted" ? (
-                    <Link
-                      href="/candidate/inbox"
-                      onClick={(e) => e.stopPropagation()}
-                      className="px-3 py-1.5 text-xs font-medium rounded-md bg-neutral-900 text-white hover:bg-neutral-800 flex items-center gap-1.5 transition-colors"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Reply in Inbox</span>
-                    </Link>
-                  ) : (
-                    <span className="text-xs text-neutral-400 font-mono">
-                      {job.dispatched_at || "10:00 AM"}
-                    </span>
-                  )}
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Preferred Location
+                  </label>
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="San Francisco, CA or Remote"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-zinc-500"
+                  />
                 </div>
               </div>
 
-              {/* Match Explanation Proof */}
-              {job.explanation && (
-                <div className="mt-3.5 pt-3.5 border-t border-neutral-100 text-xs text-neutral-600 leading-relaxed bg-neutral-50/70 p-2.5 rounded">
-                  <span className="font-medium text-neutral-800">Why matched: </span>
-                  {job.explanation}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Job Details Modal */}
-      {selectedJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-lg border border-neutral-200 max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl">
-            {/* Modal Header */}
-            <div className="p-5 border-b border-neutral-200 flex items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-lg font-semibold text-neutral-900">
-                    {selectedJob.title}
-                  </h2>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-neutral-100 text-neutral-800">
-                    {selectedJob.match_score}% match
-                  </span>
-                  {statusBadge(selectedJob.application_status)}
-                </div>
-                <div className="text-xs text-neutral-500 mt-1 flex items-center gap-3">
-                  <span className="font-medium text-neutral-800">{selectedJob.company}</span>
-                  <span>•</span>
-                  <span>{selectedJob.location} ({selectedJob.remote_policy})</span>
-                  {selectedJob.salary_min > 0 && (
-                    <>
-                      <span>•</span>
-                      <span>{salaryRange(selectedJob.salary_min, selectedJob.salary_max, selectedJob.currency)}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedJob(null)}
-                className="p-1 text-neutral-400 hover:text-neutral-700 rounded-md"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-5 overflow-y-auto space-y-5 text-xs text-neutral-700 leading-relaxed">
-              {/* Automated Dispatch Notice */}
-              <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-md space-y-1">
-                <div className="font-semibold text-neutral-900 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Submitted automatically at 10:00 AM</span>
-                </div>
-                <p className="text-[11px] text-neutral-600">
-                  Your parsed resume evidence was delivered directly to {selectedJob.company}. When the recruiter reviews your background and initiates outreach, you will receive an email and a direct message in your inbox.
-                </p>
-              </div>
-
-              {/* Match Explanation */}
-              <div className="space-y-1.5">
-                <h4 className="font-semibold text-neutral-900">Match Evidence</h4>
-                <p className="text-neutral-600">{selectedJob.explanation}</p>
-              </div>
-
-              {/* 5-Component Score Breakdown */}
-              {selectedJob.match_breakdown && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-neutral-900">Deterministic Scoring Breakdown</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
-                    <div className="p-2 border border-neutral-100 rounded bg-neutral-50">
-                      <div className="text-[10px] text-neutral-500 uppercase">Skills (35%)</div>
-                      <div className="font-semibold text-neutral-900 mt-0.5">
-                        {Math.round((selectedJob.match_breakdown.skills_score || 0) * 100)}%
-                      </div>
-                    </div>
-                    <div className="p-2 border border-neutral-100 rounded bg-neutral-50">
-                      <div className="text-[10px] text-neutral-500 uppercase">Experience (25%)</div>
-                      <div className="font-semibold text-neutral-900 mt-0.5">
-                        {Math.round((selectedJob.match_breakdown.experience_score || 0) * 100)}%
-                      </div>
-                    </div>
-                    <div className="p-2 border border-neutral-100 rounded bg-neutral-50">
-                      <div className="text-[10px] text-neutral-500 uppercase">Recency (20%)</div>
-                      <div className="font-semibold text-neutral-900 mt-0.5">
-                        {Math.round((selectedJob.match_breakdown.recency_score || 0) * 100)}%
-                      </div>
-                    </div>
-                    <div className="p-2 border border-neutral-100 rounded bg-neutral-50">
-                      <div className="text-[10px] text-neutral-500 uppercase">Projects (10%)</div>
-                      <div className="font-semibold text-neutral-900 mt-0.5">
-                        {Math.round((selectedJob.match_breakdown.projects_score || 0) * 100)}%
-                      </div>
-                    </div>
-                    <div className="p-2 border border-neutral-100 rounded bg-neutral-50">
-                      <div className="text-[10px] text-neutral-500 uppercase">Domain (10%)</div>
-                      <div className="font-semibold text-neutral-900 mt-0.5">
-                        {Math.round((selectedJob.match_breakdown.domain_score || 0) * 100)}%
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Job Description */}
-              <div className="space-y-1.5">
-                <h4 className="font-semibold text-neutral-900">About the Role</h4>
-                <p className="whitespace-pre-line text-neutral-600 leading-relaxed">
-                  {selectedJob.description}
-                </p>
-              </div>
-
-              {/* Responsibilities */}
-              {selectedJob.responsibilities && (
-                <div className="space-y-1.5">
-                  <h4 className="font-semibold text-neutral-900">Key Responsibilities</h4>
-                  <p className="whitespace-pre-line text-neutral-600 leading-relaxed">
-                    {selectedJob.responsibilities}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-neutral-200 flex items-center justify-between">
-              {selectedJob.company_website ? (
-                <a
-                  href={selectedJob.company_website}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs text-neutral-500 hover:text-neutral-800 flex items-center gap-1"
-                >
-                  <span>Company Website</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              ) : (
-                <div />
-              )}
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedJob(null)}
-                  className="btn btn-outline text-xs"
-                >
-                  Close
-                </button>
-                {selectedJob.application_status === "recruiter_contacted" && (
-                  <Link
-                    href="/candidate/inbox"
-                    className="btn btn-primary text-xs flex items-center gap-1.5"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Work Authorization
+                  </label>
+                  <select
+                    value={workAuth}
+                    onChange={(e) => setWorkAuth(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-zinc-500"
                   >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                    <span>Open Conversation</span>
-                  </Link>
-                )}
+                    <option value="Authorized to work in US (Citizen or PR)">
+                      US Citizen or Permanent Resident
+                    </option>
+                    <option value="Requires US Visa Sponsorship (H-1B, O-1, TN)">
+                      Requires Visa Sponsorship (H-1B, O-1, TN)
+                    </option>
+                    <option value="Authorized in Canada / UK / EU">
+                      Authorized in Canada / UK / EU
+                    </option>
+                    <option value="Authorized for Global Remote Contract">
+                      Global Remote Contractor
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                    Minimum Salary Floor ($/yr)
+                  </label>
+                  <input
+                    type="number"
+                    value={minSalary}
+                    onChange={(e) => setMinSalary(e.target.value)}
+                    placeholder="140000"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-zinc-500"
+                  />
+                </div>
               </div>
-            </div>
+
+              <div>
+                <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
+                  Work Preference
+                </label>
+                <select
+                  value={workPref}
+                  onChange={(e) => setWorkPref(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-zinc-500"
+                >
+                  <option value="Remote">Remote Only</option>
+                  <option value="Hybrid">Hybrid</option>
+                  <option value="Onsite">Onsite</option>
+                  <option value="Any">Flexible</option>
+                </select>
+              </div>
+
+              {profileSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-950/40 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <span>{profileSuccess}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={updatingProfile}
+                className="w-full py-2.5 rounded-lg text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <span>{updatingProfile ? "Saving Updates..." : "Save Matching Info"}</span>
+              </button>
+            </form>
           </div>
         </div>
-      )}
+
+        {/* Daily 10 AM Dispatched Applications Section */}
+        <div className="space-y-4 pt-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-white tracking-tight">
+                Daily 10:00 AM Dispatches
+              </h2>
+              <p className="text-xs text-zinc-400">
+                10 tailored applications dispatched to matching startup openings.
+              </p>
+            </div>
+            <span className="text-xs font-mono px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
+              10 / 10 Active
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {jobs.slice(0, 10).map((job, idx) => (
+              <div
+                key={job.id || idx}
+                className="p-4 rounded-xl border border-zinc-800/80 bg-zinc-900/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-white">{job.title}</span>
+                    <span className="text-zinc-500">&bull;</span>
+                    <span className="text-zinc-300">{job.company || job.company_name}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-zinc-500 font-mono text-[11px]">
+                    <span>{job.location || "Remote"}</span>
+                    <span>&bull;</span>
+                    <span>{salaryRange(job.salary_min, job.salary_max)}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="px-2.5 py-1 rounded bg-emerald-950/40 border border-emerald-900 text-emerald-400 font-mono text-[11px]">
+                    Dispatched 10:00 AM
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

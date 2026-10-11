@@ -361,3 +361,16 @@ export async function trigger10amDispatch() {
   });
 }
 
+export async function getCandidateProfile() {
+  return api("/api/candidate/profile");
+}
+
+export async function updateCandidateProfile(data: any) {
+  return api("/api/candidate/profile", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+

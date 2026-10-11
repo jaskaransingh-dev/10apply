@@ -174,21 +174,18 @@ function JoinForm() {
             <span className="text-xl font-bold tracking-tight text-white group-hover:text-zinc-200 transition-colors">
               rec
             </span>
-            <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded">
-              private candidate network
-            </span>
           </Link>
 
-          <div className="flex items-center gap-4 text-xs font-mono">
+          <div className="flex items-center gap-5 text-sm">
             <Link
               href="/recruiters/waitlist"
-              className="text-zinc-400 hover:text-white transition-colors"
+              className="text-xs text-zinc-400 hover:text-white transition-colors"
             >
-              Recruiter Access
+              Recruiters
             </Link>
             <Link
               href="/login"
-              className="px-3.5 py-1.5 rounded-md font-sans text-xs font-medium bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 transition-colors"
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               Sign In
             </Link>

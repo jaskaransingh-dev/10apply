@@ -102,20 +102,21 @@ export default function RecruiterWaitlistPage() {
             <span className="text-xl font-bold tracking-tight text-white group-hover:text-zinc-200 transition-colors">
               rec
             </span>
-            <span className="text-xs font-mono uppercase tracking-wider text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded">
-              for hiring teams
-            </span>
           </Link>
 
-          <div className="flex items-center gap-4 text-sm">
-            <Link href="/" className="text-zinc-400 hover:text-white transition-colors">
-              Candidate Network
-            </Link>
+          <div className="flex items-center gap-5 text-sm">
             <Link
               href="/login"
-              className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 transition-colors"
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
               Sign In
+            </Link>
+            <Link
+              href="/join?code=REC-UNLIMITED"
+              className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center gap-1.5"
+            >
+              <span>Join with Invite</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>
