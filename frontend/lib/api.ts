@@ -355,6 +355,21 @@ export async function joinWaitlist(email: string, name?: string, inviteCode?: st
   });
 }
 
+export async function joinCandidateWaitlist(data: {
+  name?: string;
+  email: string;
+  role_interest?: string;
+  current_company?: string;
+  linkedin_url?: string;
+  notes?: string;
+}) {
+  return api("/api/candidate-waitlist", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
 export async function trigger10amDispatch() {
   return api("/api/candidate/run-10am", {
     method: "POST",

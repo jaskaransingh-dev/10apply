@@ -181,10 +181,10 @@ function LoginFormContent() {
               Recruiters
             </Link>
             <Link
-              href="/join?code=REC-UNLIMITED"
+              href="/join"
               className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center gap-1.5"
             >
-              <span>Join with Invite</span>
+              <span>Have an invite?</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -200,14 +200,14 @@ function LoginFormContent() {
               rec
             </div>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              Sign In
+              Welcome back
             </h1>
             <p className="text-xs text-zinc-400">
-              Access your confidential dispatches or candidate pipeline.
+              Sign in to your private account.
             </p>
           </div>
 
-          {/* Role Toggle */}
+          {/* Role Toggle: Candidate · Recruiter */}
           <div className="bg-zinc-900 p-1 rounded-lg border border-zinc-800 grid grid-cols-2 gap-1 text-xs">
             <button
               type="button"
@@ -218,7 +218,7 @@ function LoginFormContent() {
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              Candidate Portal
+              Candidate
             </button>
             <button
               type="button"
@@ -229,7 +229,7 @@ function LoginFormContent() {
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              Recruiter Portal
+              Recruiter
             </button>
           </div>
 
@@ -348,23 +348,33 @@ function LoginFormContent() {
           {/* Access Links */}
           <div className="text-center space-y-2 text-xs text-zinc-500">
             {activeRole === "candidate" ? (
-              <p>
-                Need an invitation?{" "}
-                <Link href="/join" className="text-zinc-300 hover:text-white underline underline-offset-4">
-                  Join via single-use invite key
-                </Link>
-              </p>
+              <div className="space-y-1">
+                <p>
+                  Have an invite?{" "}
+                  <Link href="/join" className="text-zinc-300 hover:text-white underline underline-offset-4 font-medium">
+                    Join here.
+                  </Link>
+                </p>
+                <p>
+                  No invite yet?{" "}
+                  <Link href="/candidate/waitlist" className="text-zinc-400 hover:text-zinc-200 underline underline-offset-4">
+                    Request one.
+                  </Link>
+                </p>
+              </div>
             ) : (
-              <p>
-                Not registered yet?{" "}
-                <Link href="/recruiters/waitlist" className="text-zinc-300 hover:text-white underline underline-offset-4">
-                  Request startup recruiter access
-                </Link>
-              </p>
+              <div className="space-y-1">
+                <p>
+                  Looking to hire?{" "}
+                  <Link href="/recruiters/waitlist" className="text-zinc-300 hover:text-white underline underline-offset-4 font-medium">
+                    Request access.
+                  </Link>
+                </p>
+              </div>
             )}
-            <p>
+            <p className="pt-2">
               <Link href="/" className="text-zinc-500 hover:text-zinc-300">
-                &larr; Return to Homepage
+                &larr; Return to homepage
               </Link>
             </p>
           </div>

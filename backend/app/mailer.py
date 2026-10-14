@@ -186,36 +186,54 @@ def queue_outbox_email(db, idempotency_key: str, recipient_email: str, recipient
             title="Your Profile is Verified",
             preheader="Candidate Onboarding Complete",
             content_html=f"""
-            <p>Welcome to <strong>rec</strong>, {recipient_name or 'Member'}. Your stealth candidate profile has been authenticated.</p>
+            <p>Welcome to <strong>rec</strong>, {recipient_name or 'Member'}. Your candidate profile is now active on the private network.</p>
             <div style="background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 16px; margin: 20px 0;">
                 <div style="font-size: 11px; font-family: monospace; color: #71717a; text-transform: uppercase; margin-bottom: 8px;">Network Verification</div>
-                <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Daily 10:00 AM Dispatch Engine: Active</div>
+                <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Daily 10:00 AM Applications: Active</div>
                 <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Current Employer Shield: Protected</div>
-                <div style="color: #34d399; font-size: 13px; font-weight: 500;">[OK] Master Invite Code: REC-UNLIMITED</div>
+                <div style="color: #34d399; font-size: 13px; font-weight: 500;">[OK] Single-Use Peer Invites: 5 Available in Dashboard</div>
             </div>
-            <p>Every morning at 10:00 AM, our deterministic matching engine will rank live startup openings and dispatch up to 10 tailored applications on your behalf.</p>
-            <p>You can sign in anytime to update your resume or manage your peer invitation links.</p>
+            <p>Every morning at 10:00 AM, rec applies to up to 10 matching startup roles for you based on your parsed resume and preferences.</p>
+            <p>You can sign in anytime to update your resume, pause your search, or invite trusted colleagues.</p>
             """,
             action_label="View Candidate Dashboard",
             action_url="https://discovered-site.vercel.app/candidate/jobs"
         )
+    elif template in ("candidate_waitlist", "candidate_invite_request"):
+        html_body = format_branded_email(
+            title="Invite Request Received",
+            preheader="rec Private Network",
+            content_html=f"""
+            <p>Hello {recipient_name or 'there'},</p>
+            <p>Thank you for requesting an invite to <strong>rec</strong>. We review candidate requests in weekly batches to keep the network small and high-signal.</p>
+            <div style="background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 16px; margin: 20px 0;">
+                <div style="font-size: 11px; font-family: monospace; color: #71717a; text-transform: uppercase; margin-bottom: 8px;">Request Status</div>
+                <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Application Status: Received & In Review</div>
+                <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Privacy: Current Employer Shield Active</div>
+                <div style="color: #34d399; font-size: 13px; font-weight: 500;">[OK] Dispatch Cadence: 10:00 AM Daily Matches</div>
+            </div>
+            <p>When an invitation slot opens, you will receive a single-use private link to set up your profile and upload your resume.</p>
+            """,
+            action_label="Learn How rec Works",
+            action_url="https://discovered-site.vercel.app/"
+        )
     elif template in ("recruiter_welcome", "recruiter_waitlist"):
         html_body = format_branded_email(
-            title="Recruiter Access Confirmed",
+            title="Access Request Received",
             preheader="Startup Platform Access",
             content_html=f"""
             <p>Hello {recipient_name or 'Founder'},</p>
-            <p>Your startup platform access request has been confirmed. You can now post openings and receive verified candidates matched to your technical stack.</p>
+            <p>Your platform access request has been received. We review hiring requests in batches to protect candidate privacy and maintain high match accuracy.</p>
             <div style="background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 16px; margin: 20px 0;">
-                <div style="font-size: 11px; font-family: monospace; color: #71717a; text-transform: uppercase; margin-bottom: 8px;">Platform Access</div>
-                <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Direct Candidate Pipeline: Enabled</div>
+                <div style="font-size: 11px; font-family: monospace; color: #71717a; text-transform: uppercase; margin-bottom: 8px;">Platform Status</div>
+                <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Direct Candidate Pipeline: Pending Review</div>
                 <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Agency Fees: $0</div>
                 <div style="color: #34d399; font-size: 13px; font-weight: 500;">[OK] Candidate Evidence: Parsed Resumes Attached</div>
             </div>
-            <p>Publish an opening to begin receiving high-signal applicants every morning at 10:00 AM.</p>
+            <p>Approved teams receive access in weekly batches to publish roles and connect directly with quiet job switchers.</p>
             """,
-            action_label="Post Opening & Review Pipeline",
-            action_url="https://discovered-site.vercel.app/employer"
+            action_label="Review Request Status",
+            action_url="https://discovered-site.vercel.app/recruiters/waitlist"
         )
     elif template == "password_reset":
         reset_token = (payload or {}).get("token", "") or (payload or {}).get("reset_token", "")

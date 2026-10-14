@@ -22,14 +22,14 @@ VALUES
 -- Seed initial pending invitations
 INSERT OR IGNORE INTO invitations (id, inviter_id, token, status)
 VALUES
-  ('inv_unlimited_master', 'usr_cand_alex', 'REC-UNLIMITED', 'pending'),
+  ('inv_demo_0', 'usr_cand_alex', 'rec_launch_seed1', 'pending'),
   ('inv_demo_1', 'usr_cand_alex', 'cross_alpha1', 'pending'),
   ('inv_demo_2', 'usr_cand_alex', 'cross_alpha2', 'pending'),
   ('inv_demo_3', 'usr_cand_elena', 'cross_beta1', 'pending');
 
 -- Seed master launchrec user
 INSERT OR IGNORE INTO users (id, email, password_hash, role, account_status, invite_code, is_demo)
-VALUES ('usr_launchrec', 'launchrec.noreply@gmail.com', '02vn2onmv092bkaosm2', 'candidate', 'active', 'REC-UNLIMITED', 0);
+VALUES ('usr_launchrec', 'launchrec.noreply@gmail.com', '02vn2onmv092bkaosm2', 'candidate', 'active', 'INV-LAUNCH', 0);
 
 INSERT OR IGNORE INTO candidate_profiles (id, user_id, name, email, headline, work_authorization, min_salary, skills, is_demo)
 VALUES ('prof_launchrec', 'usr_launchrec', 'Launch Rec Member', 'launchrec.noreply@gmail.com', 'Senior Full-Stack Engineer', 'Authorized to work in US (Citizen or PR)', 150000, '["Python", "FastAPI", "React", "TypeScript", "PostgreSQL"]', 0);

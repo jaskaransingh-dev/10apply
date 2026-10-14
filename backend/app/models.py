@@ -403,7 +403,7 @@ class WaitlistEntry(Base):
     hiring_notes = Column(String, default="")
     resume_text = Column(Text, default="")
     skills = Column(Text, default="[]")
-    invite_code = Column(String, unique=True, index=True, default="")
+    invite_code = Column(String, default="")
     uses = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -430,4 +430,19 @@ class RecruiterWaitlistEntry(Base):
     hiring_needs = Column(Text, default="")
     status = Column(String, default="pending_review")  # pending_review | approved | rejected
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CandidateWaitlistEntry(Base):
+    """Waitlist entries for candidates requesting private platform invites."""
+    __tablename__ = "candidate_waitlist"
+    id = Column(String, primary_key=True, default=uid)
+    name = Column(String, default="")
+    email = Column(String, unique=True, index=True, nullable=False)
+    role_interest = Column(String, default="")
+    current_company = Column(String, default="")
+    linkedin_url = Column(String, default="")
+    notes = Column(Text, default="")
+    status = Column(String, default="pending_invite")  # pending_invite | invited | registered
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 

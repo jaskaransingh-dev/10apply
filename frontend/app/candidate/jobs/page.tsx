@@ -125,9 +125,9 @@ export default function CandidateDashboardPage() {
     }
   };
 
-  const handleCopyUnlimited = () => {
+  const handleCopyInvite = () => {
     const origin = typeof window !== "undefined" ? window.location.origin : "https://discovered-site.vercel.app";
-    const link = `${origin}/join?code=REC-UNLIMITED`;
+    const link = `${origin}/join`;
     navigator.clipboard.writeText(link);
     setCopiedUnlimited(true);
     setTimeout(() => setCopiedUnlimited(false), 2500);
@@ -184,44 +184,53 @@ export default function CandidateDashboardPage() {
 
             <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
               <span className="text-xs font-mono text-zinc-500 uppercase tracking-wider block">
-                Master Invitation Token
+                Peer Invitations
               </span>
               <span className="text-lg font-bold text-zinc-200 mt-1 block font-mono">
-                REC-UNLIMITED
+                5 Invites
               </span>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Unlimited uses for colleagues
+                Single-use tokens for trusted peers
               </p>
             </div>
           </div>
         </div>
 
-        {/* Master Unlimited Invite Link Banner */}
+        {/* Peer Invites Banner */}
         <div className="p-6 rounded-xl border border-zinc-800 bg-zinc-900/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-xs font-mono uppercase tracking-wider text-zinc-400">
-              Share Unlimited Candidate Invite
+              Invite Trusted Colleagues
             </span>
             <p className="text-xs text-zinc-400">
-              Colleagues can join using key <code className="text-zinc-200 font-mono">REC-UNLIMITED</code> without invite caps.
+              You have 5 single-use invitations. An invite decrements only after your peer finishes verification.
             </p>
           </div>
-          <button
-            onClick={handleCopyUnlimited}
-            className="px-4 py-2.5 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 transition-colors flex items-center gap-2 shrink-0"
-          >
-            {copiedUnlimited ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Copied Link</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                <span>Copy Unlimited Invite Link</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/candidate/invite"
+              className="px-4 py-2.5 rounded-lg text-xs font-semibold bg-white text-zinc-950 hover:bg-zinc-200 transition-colors flex items-center gap-1.5 shrink-0"
+            >
+              <span>Manage Invites</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+            <button
+              onClick={handleCopyInvite}
+              className="px-4 py-2.5 rounded-lg text-xs font-medium bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-200 transition-colors flex items-center gap-2 shrink-0"
+            >
+              {copiedUnlimited ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Copied Link</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Copy Join Link</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Two MVP Action Cards: Update Resume & Update Profile Info */}

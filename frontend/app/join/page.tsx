@@ -268,20 +268,20 @@ function JoinForm() {
               <button
                 type="submit"
                 disabled={isValidating}
-                className="w-full py-3 rounded-lg text-sm font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-lg text-sm font-semibold bg-white text-zinc-950 hover:bg-zinc-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
               >
-                {isValidating ? "Validating Access Key..." : "Verify Access Key & Proceed"}
+                {isValidating ? "Validating invite key..." : "Verify invite & continue"}
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
 
             <div className="pt-4 border-t border-zinc-800/80 text-xs text-zinc-500 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <span>Are you a startup founder or recruiter?</span>
+              <span>No invite yet?</span>
               <Link
-                href="/recruiters/waitlist"
-                className="text-zinc-300 hover:text-white underline underline-offset-4"
+                href="/candidate/waitlist"
+                className="text-zinc-300 hover:text-white underline underline-offset-4 font-medium"
               >
-                Apply for Recruiter Access &rarr;
+                Request an invite &rarr;
               </Link>
             </div>
           </div>
@@ -363,7 +363,7 @@ function JoinForm() {
             <div className="border-b border-zinc-800/80 pb-5">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-mono text-zinc-400 uppercase tracking-wider">
-                  Invite Code: <span className="text-zinc-200 font-bold">{verifiedToken}</span>
+                  Verified Candidate Registration
                 </span>
                 <span className="text-xs font-mono text-zinc-500">
                   Step {step} of 3
@@ -379,14 +379,14 @@ function JoinForm() {
               </div>
 
               <h2 className="text-2xl font-bold text-white tracking-tight">
-                {step === 1 && "Create Confidential Account"}
-                {step === 2 && "Target Role & Work Authorization"}
-                {step === 3 && "Resume & Proof of Work"}
+                {step === 1 && "Create your account"}
+                {step === 2 && "Target roles & preferences"}
+                {step === 3 && "Resume & proof of work"}
               </h2>
               <p className="text-xs text-zinc-400 mt-1">
-                {step === 1 && "Basic authentication credentials for your private portal."}
-                {step === 2 && "Filter parameters for the daily 10:00 AM dispatch engine."}
-                {step === 3 && "Upload your resume once. Our parsing engine extracts skills and maps matches."}
+                {step === 1 && "Step 1 of 3. Next, your target roles. Then your resume."}
+                {step === 2 && "Configure matching parameters for your daily 10:00 AM dispatch."}
+                {step === 3 && "Upload your resume once. Our matching engine handles the rest."}
               </p>
             </div>
 

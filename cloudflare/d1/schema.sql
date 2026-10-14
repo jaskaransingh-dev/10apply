@@ -309,3 +309,18 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_pwd_reset_tokens ON password_reset_tokens(token);
+
+-- 18. Candidate Waitlist Table (Request an Invite)
+CREATE TABLE IF NOT EXISTS candidate_waitlist (
+    id TEXT PRIMARY KEY,
+    name TEXT DEFAULT '',
+    email TEXT UNIQUE NOT NULL,
+    role_interest TEXT DEFAULT '',
+    current_company TEXT DEFAULT '',
+    linkedin_url TEXT DEFAULT '',
+    notes TEXT DEFAULT '',
+    status TEXT DEFAULT 'pending_invite',
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_candidate_waitlist_email ON candidate_waitlist(email);
+

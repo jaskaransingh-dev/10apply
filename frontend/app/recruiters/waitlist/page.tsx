@@ -107,15 +107,15 @@ export default function RecruiterWaitlistPage() {
           <div className="flex items-center gap-5 text-sm">
             <Link
               href="/login"
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
             >
-              Sign In
+              Sign in
             </Link>
             <Link
-              href="/join?code=REC-UNLIMITED"
+              href="/join"
               className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center gap-1.5"
             >
-              <span>Join with Invite</span>
+              <span>Have an invite?</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
@@ -128,7 +128,7 @@ export default function RecruiterWaitlistPage() {
         <div className="flex items-center gap-2 text-xs text-zinc-500 mb-8 font-mono">
           <Link href="/" className="hover:text-zinc-300">rec</Link>
           <ChevronRight className="w-3.5 h-3.5" />
-          <span className="text-zinc-400">Recruiter Waitlist</span>
+          <span className="text-zinc-400">Request access</span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
@@ -136,50 +136,50 @@ export default function RecruiterWaitlistPage() {
           <div className="lg:col-span-5 space-y-6">
             <div>
               <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">
-                Startup Hiring Platform
+                For startup hiring teams
               </span>
               <h1 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mt-2 leading-tight">
-                Hire vetted, passive talent without inbound fatigue.
+                Pre-vetted startup talent. No agency. No markup.
               </h1>
               <p className="mt-4 text-sm text-zinc-400 leading-relaxed">
-                rec is an invite-only network of high-performing candidates and stealth job switchers.
-                We pair active startup openings with qualified candidates every morning at 10:00 AM.
+                rec is an invite-only network of engineers, product, growth, and ops people who are open to the right move but not actively public about it. Post your roles, review matched candidates with their resume evidence, and message them directly.
               </p>
             </div>
 
-            {/* Core Value Pillars */}
+            {/* Three Value Cards */}
             <div className="space-y-4 pt-2">
               <div className="p-4 rounded-lg border border-zinc-800/80 bg-zinc-900/30">
                 <span className="text-xs font-semibold text-white block mb-1">
-                  Cross-Functional Startup Talent
+                  Matched to your stack
                 </span>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Access talent across Engineering, AI / ML, Product, Growth, Marketing, Sales, and Operations.
+                  Candidates are scored against the requirements and technical stack you set.
                 </p>
               </div>
 
               <div className="p-4 rounded-lg border border-zinc-800/80 bg-zinc-900/30">
                 <span className="text-xs font-semibold text-white block mb-1">
-                  Deterministic Match Breakdown
+                  Evidence, not keywords
                 </span>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Every match explains why a candidate fits your stack with parsed resume evidence and hard constraints.
+                  See the parsed experience behind each match, not just an inflated job title.
                 </p>
               </div>
 
               <div className="p-4 rounded-lg border border-zinc-800/80 bg-zinc-900/30">
                 <span className="text-xs font-semibold text-white block mb-1">
-                  Direct In-App Messaging
+                  Message directly
                 </span>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Reach out directly to matched candidates with zero agency markups or intermediary recruiters.
+                  Start the conversation in the app. No intermediaries or agency placement markups.
                 </p>
               </div>
             </div>
 
+            {/* Process Copy */}
             <div className="p-4 rounded-lg bg-zinc-900/60 border border-zinc-800 text-xs text-zinc-400">
-              <span className="font-semibold text-zinc-200 block mb-1">How Access Works</span>
-              We review company submissions in batches to preserve candidate privacy and guarantee high-signal introductions.
+              <span className="font-semibold text-zinc-200 block mb-1">How access works</span>
+              We review requests in batches to protect candidate privacy and keep introductions high-signal. Approved teams get access in weekly batches.
             </div>
           </div>
 
@@ -188,13 +188,13 @@ export default function RecruiterWaitlistPage() {
             <div className="p-8 rounded-xl border border-zinc-800 bg-zinc-900/40 shadow-sm">
               <div className="pb-6 border-b border-zinc-800/80 mb-6">
                 <span className="text-xs font-mono uppercase tracking-wider text-zinc-500">
-                  Access Application
+                  Hiring Platform
                 </span>
                 <h2 className="text-xl font-semibold text-white mt-1">
-                  Request Recruiter Access
+                  Request access
                 </h2>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Submit your hiring requirements. Verified startups receive invitation keys in weekly batches.
+                  Submit your hiring requirements. Approved teams get access in weekly batches.
                 </p>
               </div>
 
@@ -331,9 +331,14 @@ export default function RecruiterWaitlistPage() {
 
                 {/* Additional Notes */}
                 <div>
-                  <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1.5">
-                    Specific Roles & Tech Stack (Optional)
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-mono text-zinc-400 uppercase tracking-wider">
+                      Specific Roles & Tech Stack (Optional)
+                    </label>
+                    <span className="text-[11px] text-zinc-500">
+                      The more specific you are, the better your matches.
+                    </span>
+                  </div>
                   <textarea
                     rows={3}
                     value={notes}
@@ -361,9 +366,9 @@ export default function RecruiterWaitlistPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3 rounded-lg text-sm font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-3 rounded-lg text-sm font-semibold bg-white text-zinc-950 hover:bg-zinc-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
                   >
-                    {loading ? "Submitting Request..." : "Request Recruiter Platform Access"}
+                    {loading ? "Submitting request..." : "Request access"}
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -378,11 +383,12 @@ export default function RecruiterWaitlistPage() {
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-500">
           <div className="flex items-center gap-4 mb-4 sm:mb-0">
             <span className="font-bold text-white">rec</span>
-            <span>Private Candidate Network &bull; Zero Spam</span>
+            <span>The private network for quietly-looking engineers and startup hiring teams.</span>
           </div>
           <div className="flex items-center gap-6">
-            <Link href="/" className="hover:text-zinc-300">Candidate Network</Link>
-            <Link href="/login" className="hover:text-zinc-300">Member Sign In</Link>
+            <Link href="/" className="hover:text-zinc-300">Home</Link>
+            <Link href="/candidate/waitlist" className="hover:text-zinc-300">Request Candidate Invite</Link>
+            <Link href="/login" className="hover:text-zinc-300">Sign in</Link>
           </div>
         </div>
       </footer>

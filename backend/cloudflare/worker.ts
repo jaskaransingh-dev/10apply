@@ -16,7 +16,6 @@ function getResendKey(env: Env): string {
 
 const RESEND_FROM = "rec <onboarding@resend.dev>";
 const SANDBOX_FALLBACK = "jazing14@gmail.com";
-const UNLIMITED_CODES = ["REC-UNLIMITED", "STEALTH-UNLIMITED", "REC-VIP", "CROSS-UNLIMITED"];
 
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -149,17 +148,6 @@ export default {
           return jsonResponse({ valid: false, reason: "A valid invitation code or private link is required to join." });
         }
 
-        if (UNLIMITED_CODES.includes(code.toUpperCase())) {
-          return jsonResponse({
-            valid: true,
-            status: "pending",
-            token: "REC-UNLIMITED",
-            inviter_email: "network@rec.careers",
-            is_unlimited: true,
-            expires_at: "2099-12-31T23:59:59",
-          });
-        }
-
         const inv = await env.DB.prepare(
           "SELECT * FROM invitations WHERE token = ?"
         ).bind(code).first();
@@ -201,15 +189,12 @@ export default {
           return jsonResponse({ detail: "A valid single-use invitation code is required." }, 400);
         }
 
-        const isUnlimited = UNLIMITED_CODES.includes(code.toUpperCase());
-        if (!isUnlimited) {
-          const inv = await env.DB.prepare(
-            "SELECT * FROM invitations WHERE token = ?"
-          ).bind(code).first();
+        const inv = await env.DB.prepare(
+          "SELECT * FROM invitations WHERE token = ?"
+        ).bind(code).first();
 
-          if (!inv || inv.status !== "pending") {
-            return jsonResponse({ detail: "Invalid or already redeemed invitation code." }, 400);
-          }
+        if (!inv || inv.status !== "pending") {
+          return jsonResponse({ detail: "Invalid or already redeemed invitation code." }, 400);
         }
 
         // Check existing user
@@ -228,13 +213,19 @@ export default {
         await env.DB.prepare(`
           INSERT INTO users (id, email, password_hash, role, account_status, invite_code)
           VALUES (?, ?, ?, 'candidate', 'active', ?)
-        `).bind(userId, email, pwd, isUnlimited ? "REC-UNLIMITED" : code).run();
+        `).bind(userId, email, pwd, code).run();
 
-        // Mark invitation accepted if not unlimited
-        if (!isUnlimited) {
+        // Mark invitation accepted (single-use)
+        await env.DB.prepare(`
+          UPDATE invitations SET status = 'accepted', accepted_at = datetime('now'), invitee_id = ? WHERE token = ?
+        `).bind(userId, code).run();
+
+        // Seed 5 single-use invitations for the new member
+        for (let i = 0; i < 5; i++) {
           await env.DB.prepare(`
-            UPDATE invitations SET status = 'accepted', accepted_at = datetime('now'), invitee_id = ? WHERE token = ?
-          `).bind(userId, code).run();
+            INSERT INTO invitations (id, inviter_id, token, status, expires_at)
+            VALUES (?, ?, ?, 'pending', datetime('now', '+60 days'))
+          `).bind(`inv_${uid()}`, userId, `rec_${uid()}`).run();
         }
 
         // Create CandidateProfile
@@ -267,13 +258,13 @@ export default {
             "Your Profile is Verified",
             "Candidate Network Activated",
             `
-              <p>Welcome to <strong>rec</strong>, ${name}. Your stealth candidate profile has been authenticated.</p>
+              <p>Welcome to <strong>rec</strong>, ${name}. Your candidate profile is now active on the private network.</p>
               <div style="background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 16px; margin: 20px 0;">
-                <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Daily 10:00 AM Dispatch Engine: Active</div>
+                <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Daily 10:00 AM Applications: Active</div>
                 <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Current Employer Shield: Protected</div>
-                <div style="color: #34d399; font-size: 13px; font-weight: 500;">[OK] Master Invite Code: REC-UNLIMITED</div>
+                <div style="color: #34d399; font-size: 13px; font-weight: 500;">[OK] Single-Use Peer Invites: 5 Available in Dashboard</div>
               </div>
-              <p>Every morning at 10:00 AM, our deterministic matching engine will rank live startup openings and dispatch up to 10 tailored applications on your behalf.</p>
+              <p>Every morning at 10:00 AM, rec applies to up to 10 matching startup roles for you based on your parsed resume and preferences.</p>
             `,
             "View Candidate Dashboard",
             "https://discovered-site.vercel.app/candidate/jobs"
@@ -353,6 +344,74 @@ export default {
         if (method === "GET") {
           const { results } = await env.DB.prepare(
             "SELECT * FROM recruiter_waitlist ORDER BY created_at DESC LIMIT 100"
+          ).all();
+          return jsonResponse({ ok: true, count: results.length, entries: results });
+        }
+      }
+
+      // 4b. Candidate Waitlist (Request an Invite)
+      if (path === "/api/candidate-waitlist" || path === "/api/candidate/waitlist") {
+        if (method === "POST") {
+          const body = (await request.json().catch(() => ({}))) as any;
+          const email = (body.email || "").trim().toLowerCase();
+          const name = (body.name || "").trim() || email.split("@")[0];
+
+          if (!email || !email.includes("@")) {
+            return jsonResponse({ detail: "A valid email address is required." }, 400);
+          }
+
+          const existing = await env.DB.prepare(
+            "SELECT id FROM candidate_waitlist WHERE email = ?"
+          ).bind(email).first();
+
+          if (!existing) {
+            await env.DB.prepare(`
+              INSERT INTO candidate_waitlist (id, name, email, role_interest, current_company, linkedin_url, notes, status)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_invite')
+            `).bind(
+              `cwl_${uid()}`,
+              name,
+              email,
+              body.role_interest || "",
+              body.current_company || "",
+              body.linkedin_url || "",
+              body.notes || ""
+            ).run();
+          }
+
+          // Dispatch confirmation email via Resend
+          await sendResendEmail(
+            env,
+            email,
+            "Your rec invite request has been received",
+            brandedHtml(
+              "Invite Request Received",
+              "rec Private Network",
+              `
+                <p>Hello ${name},</p>
+                <p>Thank you for requesting an invite to <strong>rec</strong>. We review candidate requests in weekly batches to keep the network small and high-signal.</p>
+                <div style="background-color: #18181b; border: 1px solid #27272a; border-radius: 6px; padding: 16px; margin: 20px 0;">
+                  <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Application Status: Received & In Review</div>
+                  <div style="color: #34d399; font-size: 13px; font-weight: 500; margin-bottom: 4px;">[OK] Privacy: Current Employer Shield Active</div>
+                  <div style="color: #34d399; font-size: 13px; font-weight: 500;">[OK] Dispatch Cadence: 10:00 AM Daily Matches</div>
+                </div>
+                <p>When an invitation slot opens, you will receive a single-use private link to set up your profile and upload your resume.</p>
+              `,
+              "Learn How rec Works",
+              "https://discovered-site.vercel.app/"
+            )
+          );
+
+          return jsonResponse({
+            ok: true,
+            status: "waitlisted",
+            message: "Your invite request has been submitted. We review requests in weekly batches to keep the network vetted and high-signal.",
+          });
+        }
+
+        if (method === "GET") {
+          const { results } = await env.DB.prepare(
+            "SELECT * FROM candidate_waitlist ORDER BY created_at DESC LIMIT 100"
           ).all();
           return jsonResponse({ ok: true, count: results.length, entries: results });
         }
@@ -502,7 +561,7 @@ export default {
             next_dispatch: "Tomorrow at 10:00 AM",
             dispatched_today: jobs.length || 10,
           },
-          invite_stats: { remaining: 5, invites: [{ token: "REC-UNLIMITED" }] },
+          invite_stats: { remaining: 5, invites: [{ token: `rec_${uid()}` }] },
         });
       }
 

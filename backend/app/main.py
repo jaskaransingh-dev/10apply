@@ -40,6 +40,7 @@ from .models import (
     WaitlistEntry,
     PasswordResetToken,
     RecruiterWaitlistEntry,
+    CandidateWaitlistEntry,
     INVITE_LIMIT,
 )
 from .auth import (
@@ -462,7 +463,7 @@ def ensure_launchrec_account(db: Session):
             password_hash=hash_password(pwd),
             role="candidate",
             account_status="active",
-            invite_code="REC-UNLIMITED"
+            invite_code="INV-LAUNCH"
         )
         db.add(u)
         db.commit()
@@ -489,15 +490,16 @@ def ensure_launchrec_account(db: Session):
         db.add(p)
         db.commit()
 
-    # Ensure REC-UNLIMITED invitation exists
-    inv = db.query(Invitation).filter(Invitation.token == "REC-UNLIMITED").first()
-    if not inv:
-        db.add(Invitation(
-            inviter_id=u.id,
-            token="REC-UNLIMITED",
-            status="pending",
-            expires_at=datetime.utcnow() + timedelta(days=3650)
-        ))
+    # Ensure 5 single-use invitations exist for launchrec user
+    launchrec_invites = db.query(Invitation).filter(Invitation.inviter_id == u.id, Invitation.status == "pending").all()
+    if len(launchrec_invites) < 5:
+        for _ in range(5 - len(launchrec_invites)):
+            db.add(Invitation(
+                inviter_id=u.id,
+                token=f"rec_{secrets.token_hex(4)}",
+                status="pending",
+                expires_at=datetime.utcnow() + timedelta(days=60)
+            ))
         db.commit()
 
 
@@ -839,9 +841,6 @@ class ValidateInviteIn(BaseModel):
     code: str
 
 
-UNLIMITED_INVITE_CODES = {"REC-UNLIMITED", "STEALTH-UNLIMITED", "REC-VIP", "CROSS-UNLIMITED"}
-
-
 @app.get("/api/invite/validate")
 @app.get("/invitations/validate")
 @app.get("/invites/validate")
@@ -850,22 +849,12 @@ def validate_invitation(token: str = Query("", alias="token"), code: str = Query
     if not val:
         return {"valid": False, "reason": "A valid invitation code or private link is required to join."}
 
-    if val.upper() in UNLIMITED_INVITE_CODES:
-        return {
-            "valid": True,
-            "status": "pending",
-            "token": "REC-UNLIMITED",
-            "inviter_email": "network@rec.careers",
-            "is_unlimited": True,
-            "expires_at": "2099-12-31T23:59:59"
-        }
-
     inv = db.query(Invitation).filter(Invitation.token == val).first()
     if inv:
         if inv.status != "pending":
-            return {"valid": False, "status": inv.status, "reason": f"Invitation code has already been {inv.status}."}
+            return {"valid": False, "status": inv.status, "reason": f"This invitation code has already been {inv.status}."}
         if inv.expires_at and inv.expires_at < datetime.utcnow():
-            return {"valid": False, "status": "expired", "reason": "Invitation code has expired."}
+            return {"valid": False, "status": "expired", "reason": "This invitation code has expired."}
         inviter = db.query(User).filter(User.id == inv.inviter_id).first()
         return {
             "valid": True,
@@ -923,27 +912,13 @@ def _process_candidate_onboarding(
     if not code_clean:
         raise HTTPException(400, "A valid invitation code or private link is strictly required to join.")
 
-    is_unlimited = code_clean.upper() in UNLIMITED_INVITE_CODES
-    if is_unlimited:
-        inv = db.query(Invitation).filter(Invitation.token == "REC-UNLIMITED").first()
-        if not inv:
-            first_user = db.query(User).first()
-            inv = Invitation(
-                inviter_id=first_user.id if first_user else "sys_master",
-                token="REC-UNLIMITED",
-                status="pending",
-                expires_at=datetime.utcnow() + timedelta(days=3650)
-            )
-            db.add(inv)
-            db.commit()
-    else:
-        inv = db.query(Invitation).filter(Invitation.token == code_clean).first()
-        if not inv:
-            raise HTTPException(400, "Invalid invitation code. The network is private and strictly invite-only.")
-        if inv.status != "pending":
-            raise HTTPException(400, f"This invitation code has already been {inv.status}.")
-        if inv.expires_at and inv.expires_at <= datetime.utcnow():
-            raise HTTPException(400, "This invitation code has expired.")
+    inv = db.query(Invitation).filter(Invitation.token == code_clean).first()
+    if not inv:
+        raise HTTPException(400, "Invalid invitation code. The network is private and strictly invite-only.")
+    if inv.status != "pending":
+        raise HTTPException(400, f"This invitation code has already been {inv.status}.")
+    if inv.expires_at and inv.expires_at <= datetime.utcnow():
+        raise HTTPException(400, "This invitation code has expired.")
 
     email_clean = email.strip().lower()
     if not email_clean or "@" not in email_clean:
@@ -971,12 +946,11 @@ def _process_candidate_onboarding(
     db.commit()
     db.refresh(u)
 
-    # 2. Mark invitation accepted (unless unlimited)
-    if not is_unlimited:
-        inv.status = "accepted"
-        inv.accepted_at = datetime.utcnow()
-        inv.invitee_id = u.id
-        db.commit()
+    # 2. Mark invitation accepted (single-use)
+    inv.status = "accepted"
+    inv.accepted_at = datetime.utcnow()
+    inv.invitee_id = u.id
+    db.commit()
 
     # 3. Create CandidateProfile
     p = CandidateProfile(
@@ -1223,6 +1197,113 @@ def list_recruiter_waitlist(db: Session = Depends(get_db)):
                 "company_name": e.company_name,
                 "company_website": e.company_website,
                 "hiring_needs": e.hiring_needs,
+                "status": e.status,
+                "created_at": e.created_at.isoformat() if e.created_at else ""
+            }
+            for e in entries
+        ]
+    }
+
+
+# ---------- Candidate Waitlist (Request an Invite) ----------
+class CandidateWaitlistIn(BaseModel):
+    email: str
+    name: Optional[str] = ""
+    role_interest: Optional[str] = ""
+    current_company: Optional[str] = ""
+    linkedin_url: Optional[str] = ""
+    notes: Optional[str] = ""
+
+
+@app.post("/api/candidate-waitlist")
+@app.post("/api/candidate/waitlist")
+def candidate_waitlist(body: CandidateWaitlistIn, db: Session = Depends(get_db)):
+    email = body.email.strip().lower()
+    name = (body.name or "").strip()
+    if not email or "@" not in email:
+        raise HTTPException(400, "A valid email address is required.")
+    
+    # Store in CandidateWaitlistEntry
+    entry = db.query(CandidateWaitlistEntry).filter(CandidateWaitlistEntry.email == email).first()
+    if not entry:
+        entry = CandidateWaitlistEntry(
+            name=name,
+            email=email,
+            role_interest=(body.role_interest or "").strip(),
+            current_company=(body.current_company or "").strip(),
+            linkedin_url=(body.linkedin_url or "").strip(),
+            notes=(body.notes or "").strip(),
+            status="pending_invite"
+        )
+        db.add(entry)
+    else:
+        if name:
+            entry.name = name
+        if body.role_interest:
+            entry.role_interest = body.role_interest.strip()
+        if body.current_company:
+            entry.current_company = body.current_company.strip()
+        if body.linkedin_url:
+            entry.linkedin_url = body.linkedin_url.strip()
+        if body.notes:
+            entry.notes = body.notes.strip()
+
+    # Also record in generic WaitlistEntry
+    legacy = db.query(WaitlistEntry).filter(WaitlistEntry.email == email).first()
+    if not legacy:
+        legacy = WaitlistEntry(
+            side="candidate",
+            name=name,
+            email=email,
+            company=(body.current_company or "").strip(),
+            hiring_notes=(body.role_interest or "").strip(),
+            invite_code=f"WL-{secrets.token_hex(6).upper()}",
+        )
+        db.add(legacy)
+    
+    db.commit()
+
+    # Queue transactional confirmation email
+    queue_outbox_email(
+        db=db,
+        idempotency_key=f"candidate_waitlist_{hashlib.sha256(email.encode()).hexdigest()[:16]}",
+        recipient_email=email,
+        recipient_name=name or email.split("@")[0].title(),
+        subject="Your rec invite request has been received",
+        body=(
+            f"Hello {name or 'there'},\n\n"
+            f"Thank you for requesting an invite to rec.\n\n"
+            f"We review candidate requests in weekly batches to keep the network small and high-signal.\n"
+            f"When an invitation slot opens, you will receive a single-use private link to set up your profile and upload your resume.\n\n"
+            f"— rec team"
+        ),
+        template="candidate_waitlist",
+        payload={"email": email, "name": name, "role_interest": body.role_interest}
+    )
+
+    return {
+        "ok": True,
+        "status": "waitlisted",
+        "message": "Your invite request has been submitted. We review requests in weekly batches to keep the network vetted and high-signal."
+    }
+
+
+@app.get("/api/candidate-waitlist")
+@app.get("/api/candidate/waitlist")
+def list_candidate_waitlist(db: Session = Depends(get_db)):
+    entries = db.query(CandidateWaitlistEntry).order_by(CandidateWaitlistEntry.created_at.desc()).limit(100).all()
+    return {
+        "ok": True,
+        "count": len(entries),
+        "entries": [
+            {
+                "id": e.id,
+                "name": e.name,
+                "email": e.email,
+                "role_interest": e.role_interest,
+                "current_company": e.current_company,
+                "linkedin_url": e.linkedin_url,
+                "notes": e.notes,
                 "status": e.status,
                 "created_at": e.created_at.isoformat() if e.created_at else ""
             }

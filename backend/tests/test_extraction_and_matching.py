@@ -18,6 +18,7 @@ from app.models import (
     WaitlistEntry,
     EmailOutbox,
     RecruiterWaitlistEntry,
+    CandidateWaitlistEntry,
     PasswordResetToken
 )
 from app.parse import (
@@ -293,6 +294,35 @@ class TestExtractionAndMatching(unittest.TestCase):
 
         outbox = db.query(EmailOutbox).filter(EmailOutbox.recipient_email == test_email).first()
         self.assertIsNotNone(outbox, "Confirmation email must be queued in outbox for recruiter waitlist")
+        db.close()
+
+    def test_09b_candidate_waitlist_and_transactional_email(self):
+        """Verifies candidates can request an invite via waitlist and receive transactional confirmation."""
+        import secrets
+        test_email = f"candidate.{secrets.token_hex(4)}@engineers.example.com"
+        cand_payload = {
+            "name": "Devin Rivera",
+            "email": test_email,
+            "role_interest": "Distributed Systems Engineer",
+            "current_company": "MegaCorp Inc",
+            "linkedin_url": "https://linkedin.com/in/example-devin",
+            "notes": "Looking for Series A startup roles in distributed databases."
+        }
+        res = client.post("/api/candidate-waitlist", json=cand_payload)
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertTrue(data.get("ok"))
+        self.assertEqual(data.get("status"), "waitlisted")
+
+        db = SessionLocal()
+        entry = db.query(CandidateWaitlistEntry).filter(CandidateWaitlistEntry.email == test_email).first()
+        self.assertIsNotNone(entry, "Candidate waitlist entry must be persisted in DB")
+        self.assertEqual(entry.role_interest, "Distributed Systems Engineer")
+        self.assertEqual(entry.current_company, "MegaCorp Inc")
+
+        outbox = db.query(EmailOutbox).filter(EmailOutbox.recipient_email == test_email).first()
+        self.assertIsNotNone(outbox, "Confirmation email must be queued in outbox for candidate waitlist")
+        self.assertEqual(outbox.template, "candidate_waitlist")
         db.close()
 
     def test_10_forgot_password_and_reset_flow(self):

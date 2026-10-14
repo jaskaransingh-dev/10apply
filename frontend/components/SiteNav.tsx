@@ -36,7 +36,7 @@ export default function SiteNav() {
           </span>
         </Link>
 
-        {/* Right: Join with Invite & Recruiters */}
+        {/* Right: Candidates · Recruiters · Sign in · Have an invite? */}
         <div className="flex items-center gap-5 text-sm">
           {logged && (role === "employer" || role === "recruiter") ? (
             <>
@@ -53,9 +53,36 @@ export default function SiteNav() {
               >
                 Candidates
               </Link>
+              <button
+                onClick={logout}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Sign out
+              </button>
+            </>
+          ) : logged ? (
+            <>
+              <Link
+                href="/candidate/jobs"
+                className="text-xs text-zinc-400 hover:text-white transition-colors"
+              >
+                Dashboard
+              </Link>
+              <button
+                onClick={logout}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Sign out
+              </button>
             </>
           ) : (
             <>
+              <Link
+                href="/#candidates"
+                className="text-xs text-zinc-400 hover:text-white transition-colors hidden sm:inline-block"
+              >
+                Candidates
+              </Link>
               <Link
                 href="/recruiters/waitlist"
                 className="text-xs text-zinc-400 hover:text-white transition-colors"
@@ -63,29 +90,19 @@ export default function SiteNav() {
                 Recruiters
               </Link>
               <Link
-                href="/join?code=REC-UNLIMITED"
-                className="px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center gap-1.5"
+                href="/login"
+                className="text-xs text-zinc-400 hover:text-white transition-colors"
               >
-                <span>Join with Invite</span>
+                Sign in
+              </Link>
+              <Link
+                href="/join"
+                className="px-3.5 py-1.5 rounded-md text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center gap-1.5"
+              >
+                <span>Have an invite?</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
             </>
-          )}
-
-          {logged ? (
-            <button
-              onClick={logout}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
-              Sign out
-            </button>
-          ) : (
-            <Link
-              href="/login"
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
-              Sign In
-            </Link>
           )}
         </div>
       </div>
